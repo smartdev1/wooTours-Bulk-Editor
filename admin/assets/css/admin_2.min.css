@@ -1,0 +1,740 @@
+/* Wootour Bulk Editor - Admin Styles */
+
+/* Reset & Base */
+.wbe-admin-wrap * {
+    box-sizing: border-box;
+}
+
+.wbe-admin-wrap {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    color: #1e1e1e;
+    line-height: 1.5;
+}
+
+/* Header */
+.wbe-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0 0 20px;
+    padding: 0 0 15px;
+    border-bottom: 1px solid #ccd0d4;
+}
+
+.wbe-header h1 {
+    font-size: 23px;
+    font-weight: 400;
+    margin: 0;
+    padding: 9px 0 4px;
+    line-height: 1.3;
+}
+
+.wbe-icon {
+    margin-right: 10px;
+    font-size: 24px;
+    vertical-align: middle;
+}
+
+.wbe-header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Stats Bar */
+.wbe-stats-bar {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 25px;
+    padding: 15px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.04);
+}
+
+.wbe-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.wbe-stat-label {
+    font-size: 12px;
+    color: #646970;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.wbe-stat-value {
+    font-size: 20px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+/* Main Layout */
+.wbe-main-content {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.wbe-column {
+    flex: 1;
+    min-width: 0;
+}
+
+.wbe-column-left {
+    flex: 0 0 55%;
+    max-width: 55%;
+}
+
+.wbe-column-right {
+    flex: 0 0 45%;
+    max-width: 45%;
+}
+
+/* Cards */
+.wbe-card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.04);
+    margin-bottom: 20px;
+}
+
+.wbe-card-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #dcdcde;
+    background: #f6f7f7;
+}
+
+.wbe-card-header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.wbe-card-body {
+    padding: 20px;
+}
+
+/* Sections */
+.wbe-section {
+    margin-bottom: 25px;
+}
+
+.wbe-section:last-child {
+    margin-bottom: 0;
+}
+
+.wbe-section h3 {
+    margin: 0 0 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+/* Category Filter */
+.wbe-category-filter {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.wbe-select {
+    flex: 1;
+    max-width: 300px;
+}
+
+/* Search Box */
+.wbe-search-box {
+    display: flex;
+    gap: 10px;
+}
+
+.wbe-search-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+/* Product List */
+.wbe-product-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.wbe-product-list-container {
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.wbe-product-table {
+    margin: 0;
+    border: none;
+}
+
+.wbe-product-table thead th {
+    position: sticky;
+    top: 0;
+    background: #f6f7f7;
+    z-index: 10;
+}
+
+.wbe-product-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.wbe-product-thumb {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 3px;
+}
+
+.wbe-product-name {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.wbe-category-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.wbe-category-tag {
+    padding: 2px 6px;
+    background: #f0f0f1;
+    border-radius: 3px;
+    font-size: 11px;
+    color: #2c3338;
+}
+
+.wbe-category-more {
+    padding: 2px 6px;
+    background: #dcdcde;
+    border-radius: 3px;
+    font-size: 11px;
+    color: #646970;
+    cursor: help;
+}
+
+.wbe-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.wbe-status-active {
+    background: #d1e7dd;
+    color: #0a3622;
+}
+
+.wbe-status-inactive {
+    background: #f8d7da;
+    color: #58151c;
+}
+
+.wbe-empty {
+    color: #8c8f94;
+    font-style: italic;
+}
+
+/* Pagination */
+.wbe-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #dcdcde;
+}
+
+.wbe-page-info {
+    font-size: 13px;
+    color: #646970;
+}
+
+/* Date Range */
+.wbe-date-range {
+    display: flex;
+    gap: 15px;
+}
+
+.wbe-date-field {
+    flex: 1;
+}
+
+.wbe-date-field label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #2c3338;
+}
+
+.wbe-datepicker {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.wbe-wootour-style .wbe-datepicker {
+    background-color: #fff;
+}
+
+.wbe-clear-date {
+    margin-top: 5px;
+}
+
+.wbe-wootour-style .button {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.wbe-wootour-style .wbe-dates-list {
+    background: #f6f7f7;
+    border: 1px solid #ccd0d4;
+}
+
+.wbe-wootour-style input[type="number"] {
+    max-width: 100%;
+}
+
+/* Weekdays */
+.wbe-weekdays {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.wbe-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 8px;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.wbe-checkbox-label:hover {
+    border-color: #8c8f94;
+    background: #f6f7f7;
+}
+
+.wbe-checkbox-label input:checked + span {
+    font-weight: 600;
+    color: #2271b1;
+}
+
+/* Calendar */
+.wbe-calendar-container {
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 15px;
+    background: #fff;
+}
+
+.wbe-calendar-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.wbe-calendar-month-year {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.wbe-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-bottom: 15px;
+}
+
+/* ==========================
+   WooTour-like Date Panel
+========================== */
+
+.wbe-wootour-style .wbe-section {
+    margin-bottom: 30px;
+}
+
+.wbe-wootour-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.wbe-wootour-field label {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 6px;
+    display: block;
+}
+
+.wbe-wootour-field .description {
+    font-size: 12px;
+    color: #646970;
+    margin-top: 4px;
+}
+
+
+.wbe-calendar-day-header {
+    text-align: center;
+    padding: 8px;
+    font-weight: 600;
+    color: #646970;
+    background: #f6f7f7;
+    border-radius: 3px;
+}
+
+.wbe-calendar-day {
+    text-align: center;
+    padding: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    transition: all 0.2s;
+}
+
+.wbe-calendar-day:hover {
+    background: #f0f0f1;
+}
+
+.wbe-calendar-day.selected {
+    background: #2271b1;
+    color: #fff;
+    font-weight: 600;
+}
+
+.wbe-calendar-day.other-month {
+    color: #8c8f94;
+}
+
+.wbe-calendar-day.disabled {
+    color: #dcdcde;
+    cursor: not-allowed;
+}
+
+.wbe-calendar-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* Selected Dates */
+.wbe-selected-dates {
+    margin-top: 15px;
+}
+
+.wbe-selected-dates h4 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.wbe-dates-list {
+    max-height: 150px;
+    overflow-y: auto;
+    padding: 10px;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    background: #f6f7f7;
+}
+
+.wbe-date-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    margin: 0 5px 5px 0;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 12px;
+    font-size: 12px;
+}
+
+.wbe-date-tag button {
+    padding: 0;
+    border: none;
+    background: none;
+    color: #d63638;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+}
+
+/* Actions */
+.wbe-actions-card .wbe-card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+/* Progress Bar */
+.wbe-progress-container {
+    width: 100%;
+    padding: 20px;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    background: #f6f7f7;
+}
+
+.wbe-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.wbe-progress-bar {
+    height: 8px;
+    background: #fff;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.wbe-progress-fill {
+    height: 100%;
+    background: #2271b1;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.wbe-progress-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #646970;
+}
+
+.wbe-progress-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+/* Modals */
+.wbe-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.wbe-modal-content {
+    background: #fff;
+    border-radius: 8px;
+    max-width: 800px;
+    width: 90%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.wbe-modal-large {
+    max-width: 1000px;
+}
+
+.wbe-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #dcdcde;
+}
+
+.wbe-modal-header h2 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.wbe-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #646970;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wbe-modal-close:hover {
+    color: #d63638;
+}
+
+.wbe-modal-body {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.wbe-modal-footer {
+    padding: 20px;
+    border-top: 1px solid #dcdcde;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* Toasts */
+.wbe-toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.wbe-toast {
+    padding: 15px 20px;
+    border-radius: 4px;
+    color: #fff;
+    min-width: 300px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: slideIn 0.3s ease;
+}
+
+.wbe-toast.success {
+    background: #2271b1;
+}
+
+.wbe-toast.error {
+    background: #d63638;
+}
+
+.wbe-toast.warning {
+    background: #dba617;
+}
+
+.wbe-toast.info {
+    background: #646970;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Empty States */
+.wbe-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #646970;
+}
+
+.wbe-empty-state p {
+    margin: 0 0 10px;
+}
+
+/* Loading States */
+.wbe-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px;
+    color: #646970;
+}
+
+.wbe-calendar-loading {
+    grid-column: 1 / -1;
+    padding: 40px;
+    text-align: center;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .wbe-main-content {
+        flex-direction: column;
+    }
+    
+    .wbe-column-left,
+    .wbe-column-right {
+        flex: 1;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 782px) {
+    .wbe-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+    
+    .wbe-stats-bar {
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+    
+    .wbe-weekdays {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .wbe-date-range {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 782px) {
+    .wbe-wootour-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* Print Styles */
+@media print {
+    .wbe-header-actions,
+    .wbe-actions-card,
+    .wbe-modal,
+    .wbe-toast-container {
+        display: none !important;
+    }
+}

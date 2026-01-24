@@ -1,0 +1,499 @@
+/**
+ * Wootour Bulk Editor - Admin Styles
+ */
+
+.wbe-admin-wrap {
+    margin: 20px 20px 0 0;
+}
+
+/* Header */
+.wbe-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #ccd0d4;
+}
+
+.wbe-header h1 {
+    margin: 0;
+    font-size: 23px;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+.wbe-icon {
+    margin-right: 8px;
+}
+
+.wbe-header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Stats Bar */
+.wbe-stats-bar {
+    display: flex;
+    gap: 30px;
+    padding: 15px 20px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.wbe-stat {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.wbe-stat-label {
+    color: #646970;
+    font-size: 13px;
+}
+
+.wbe-stat-value {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+/* Steps Indicator */
+.wbe-steps {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+
+.wbe-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    position: relative;
+    opacity: 0.4;
+    transition: all 0.3s ease;
+}
+
+.wbe-step.active {
+    opacity: 1;
+}
+
+.wbe-step.completed {
+    opacity: 1;
+}
+
+.wbe-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: calc(50% + 30px);
+    width: calc(100% - 60px);
+    height: 2px;
+    background: #c3c4c7;
+    z-index: 0;
+}
+
+.wbe-step.completed:not(:last-child)::after {
+    background: #2271b1;
+}
+
+.wbe-step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #f0f0f1;
+    border: 2px solid #c3c4c7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 16px;
+    color: #646970;
+    margin-bottom: 8px;
+    position: relative;
+    z-index: 1;
+    transition: all 0.3s ease;
+}
+
+.wbe-step.active .wbe-step-number {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+    transform: scale(1.1);
+}
+
+.wbe-step.completed .wbe-step-number {
+    background: #00a32a;
+    border-color: #00a32a;
+    color: #fff;
+}
+
+.wbe-step.completed .wbe-step-number::before {
+    content: '✓';
+}
+
+.wbe-step-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #646970;
+    text-align: center;
+}
+
+.wbe-step.active .wbe-step-label {
+    color: #2271b1;
+}
+
+.wbe-step.completed .wbe-step-label {
+    color: #1d2327;
+}
+
+/* Step Content */
+.wbe-step-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.wbe-step-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Step Actions */
+.wbe-step-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 20px;
+    padding: 20px;
+    background: #f6f7f7;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+
+.wbe-step-actions .button {
+    min-width: 120px;
+}
+
+/* Cards */
+.wbe-card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    margin-bottom: 20px;
+}
+
+.wbe-card-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #c3c4c7;
+    background: #f6f7f7;
+}
+
+.wbe-card-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.wbe-card-body {
+    padding: 20px;
+}
+
+.wbe-section {
+    margin-bottom: 25px;
+}
+
+.wbe-section:last-child {
+    margin-bottom: 0;
+}
+
+.wbe-section h3 {
+    margin: 0 0 15px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+/* Category Filter */
+.wbe-category-filter {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.wbe-select {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+/* Search Box */
+.wbe-search-box {
+    display: flex;
+    gap: 10px;
+}
+
+.wbe-search-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+/* Product List */
+.wbe-product-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.wbe-product-list-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.wbe-loading {
+    padding: 60px 20px;
+    text-align: center;
+    color: #646970;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+/* Pagination */
+.wbe-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #c3c4c7;
+}
+
+.wbe-page-info {
+    color: #646970;
+    font-size: 13px;
+}
+
+/* Date Fields */
+.wbe-date-range {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.wbe-date-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.wbe-date-field label {
+    font-weight: 600;
+    font-size: 13px;
+    color: #1d2327;
+}
+
+.wbe-datepicker {
+    padding: 8px 12px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.wbe-clear-date {
+    margin-top: 5px;
+}
+
+/* Weekdays */
+.wbe-weekdays {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+}
+
+.wbe-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #fff;
+}
+
+.wbe-checkbox-label:hover {
+    background: #f6f7f7;
+    border-color: #2271b1;
+}
+
+.wbe-checkbox-label input[type="checkbox"] {
+    margin: 0;
+}
+
+.wbe-checkbox-label input:checked + span {
+    color: #2271b1;
+    font-weight: 600;
+}
+
+/* Dates List */
+.wbe-selected-dates h4 {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    color: #646970;
+}
+
+.wbe-dates-list {
+    padding: 15px;
+    background: #f6f7f7;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    min-height: 100px;
+    margin-bottom: 10px;
+}
+
+.wbe-dates-list:empty::before {
+    content: 'Aucune date sélectionnée';
+    color: #646970;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* Review Box */
+.wbe-review-box {
+    padding: 20px;
+    background: #f6f7f7;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.wbe-review-box h3 {
+    margin-top: 0;
+}
+
+#wbe-review-summary {
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* Progress */
+.wbe-progress-container {
+    padding: 20px;
+    background: #f6f7f7;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    margin-top: 15px;
+}
+
+.wbe-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.wbe-progress-bar {
+    height: 30px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.wbe-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2271b1, #135e96);
+    width: 0%;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 600;
+}
+
+.wbe-progress-details {
+    font-size: 13px;
+    color: #646970;
+    margin-bottom: 10px;
+}
+
+.wbe-progress-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* Toast Container */
+.wbe-toast-container {
+    position: fixed;
+    top: 32px;
+    right: 20px;
+    z-index: 999999;
+    max-width: 400px;
+}
+
+/* Responsive */
+@media (max-width: 1280px) {
+    .wbe-steps {
+        flex-direction: row;
+        gap: 15px;
+    }
+    
+    .wbe-step::after {
+        display: none;
+    }
+}
+
+@media (max-width: 782px) {
+    .wbe-stats-bar {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .wbe-date-range {
+        grid-template-columns: 1fr;
+    }
+    
+    .wbe-weekdays {
+        grid-template-columns: 1fr;
+    }
+    
+    .wbe-step-actions {
+        flex-direction: column;
+    }
+    
+    .wbe-step-actions .button {
+        width: 100%;
+    }
+}
