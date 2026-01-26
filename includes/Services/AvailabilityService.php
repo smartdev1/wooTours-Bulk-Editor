@@ -136,6 +136,384 @@ final class AvailabilityService implements ServiceInterface
     }
 
     /**
+     * Validate changes with detailed results (for AJAX validation)
+     * 
+     * @param array $changes
+     * @return array Detailed validation results
+     */
+    public function validateChangesDetailed(array $changes): array
+    {
+        $results = [
+            'errors' => [],
+            'warnings' => [],
+            'valid' => true,
+            'summary' => [],
+        ];
+
+        // Validation de base
+        try {
+            $this->validateChanges($changes);
+        } catch (ValidationException $e) {
+            $results['errors'][] = $e->getMessage();
+            $results['valid'] = false;
+        }
+
+        // 🔥 Validation avancée des dates
+
+        // 1. Validation de la plage de dates (start_date vs end_date)
+        if (isset($changes['start_date']) && isset($changes['end_date'])) {
+            $start_timestamp = strtotime($changes['start_date']);
+            $end_timestamp = strtotime($changes['end_date']);
+
+            if ($start_timestamp && $end_timestamp) {
+                // Date de fin antérieure à date de début
+                if ($end_timestamp < $start_timestamp) {
+                    $results['errors'][] = sprintf(
+                        'La date de fin (%s) ne peut pas être antérieure à la date de début (%s).',
+                        date('d/m/Y', $end_timestamp),
+                        date('d/m/Y', $start_timestamp)
+                    );
+                    $results['valid'] = false;
+                }
+
+                // Date de début dans le passé
+                $today_timestamp = strtotime(date('Y-m-d'));
+                if ($start_timestamp < $today_timestamp) {
+                    $results['warnings'][] = sprintf(
+                        'La date de début (%s) est dans le passé.',
+                        date('d/m/Y', $start_timestamp)
+                    );
+                }
+
+                // Plage trop longue (optionnel - 2 ans max)
+                $max_days = 730; // 2 ans
+                $days_diff = ($end_timestamp - $start_timestamp) / (60 * 60 * 24);
+                if ($days_diff > $max_days) {
+                    $results['warnings'][] = sprintf(
+                        'La plage de dates est longue (%d jours). Limite recommandée : %d jours.',
+                        $days_diff,
+                        $max_days
+                    );
+                }
+            }
+        }
+
+        // 2. Vérifier les conflits entre dates spécifiques et exclusions
+        if (!empty($changes['specific']) && !empty($changes['exclusions'])) {
+            $specific_dates = $this->normalizeDateArray($changes['specific']);
+            $exclusion_dates = $this->normalizeDateArray($changes['exclusions']);
+
+            $conflicts = array_intersect($specific_dates, $exclusion_dates);
+            if (!empty($conflicts)) {
+                foreach ($conflicts as $conflict) {
+                    $results['errors'][] = sprintf(
+                        'La date %s est à la fois une date spécifique et une exclusion.',
+                        date('d/m/Y', strtotime($conflict))
+                    );
+                    $results['valid'] = false;
+                }
+            }
+        }
+
+        // 3. Vérifier que les dates spécifiques sont dans la plage
+        if (!empty($changes['specific']) && isset($changes['start_date']) && isset($changes['end_date'])) {
+            $specific_dates = $this->normalizeDateArray($changes['specific']);
+            $start_timestamp = strtotime($changes['start_date']);
+            $end_timestamp = strtotime($changes['end_date']);
+
+            foreach ($specific_dates as $date) {
+                $date_timestamp = strtotime($date);
+
+                if ($date_timestamp < $start_timestamp) {
+                    $results['warnings'][] = sprintf(
+                        'La date spécifique %s est avant la date de début.',
+                        date('d/m/Y', $date_timestamp)
+                    );
+                }
+
+                if ($date_timestamp > $end_timestamp) {
+                    $results['warnings'][] = sprintf(
+                        'La date spécifique %s est après la date de fin.',
+                        date('d/m/Y', $date_timestamp)
+                    );
+                }
+            }
+        }
+
+        // 4. Vérifier que les exclusions sont dans la plage
+        if (!empty($changes['exclusions']) && isset($changes['start_date']) && isset($changes['end_date'])) {
+            $exclusion_dates = $this->normalizeDateArray($changes['exclusions']);
+            $start_timestamp = strtotime($changes['start_date']);
+            $end_timestamp = strtotime($changes['end_date']);
+
+            foreach ($exclusion_dates as $date) {
+                $date_timestamp = strtotime($date);
+
+                if ($date_timestamp < $start_timestamp) {
+                    $results['warnings'][] = sprintf(
+                        'L\'exclusion %s est avant la date de début.',
+                        date('d/m/Y', $date_timestamp)
+                    );
+                }
+
+                if ($date_timestamp > $end_timestamp) {
+                    $results['warnings'][] = sprintf(
+                        'L\'exclusion %s est après la date de fin.',
+                        date('d/m/Y', $date_timestamp)
+                    );
+                }
+            }
+        }
+
+        // 5. Vérifier que les weekdays sélectionnés sont cohérents avec la plage
+        if (!empty($changes['weekdays']) && isset($changes['start_date']) && isset($changes['end_date'])) {
+            $weekdays = $this->normalizeWeekdays($changes['weekdays']);
+            $start_timestamp = strtotime($changes['start_date']);
+            $end_timestamp = strtotime($changes['end_date']);
+
+            $days_in_range = [];
+            $current = $start_timestamp;
+            while ($current <= $end_timestamp) {
+                $days_in_range[] = (int) date('w', $current);
+                $current = strtotime('+1 day', $current);
+            }
+
+            $available_days_in_range = array_intersect($weekdays, array_unique($days_in_range));
+
+            if (empty($available_days_in_range)) {
+                $results['warnings'][] = 'Aucun des jours sélectionnés ne se trouve dans la plage de dates.';
+            }
+        }
+
+        // Générer un résumé
+        $results['summary'] = $this->generateValidationSummary($changes, $results);
+
+        return $results;
+    }
+
+    /**
+     * Generate a summary of validation results
+     */
+    private function generateValidationSummary(array $changes, array $validation_results): array
+    {
+        $summary = [
+            'dates_configured' => false,
+            'has_errors' => !empty($validation_results['errors']),
+            'has_warnings' => !empty($validation_results['warnings']),
+            'error_count' => count($validation_results['errors']),
+            'warning_count' => count($validation_results['warnings']),
+            'details' => [],
+        ];
+
+        // Informations sur la plage de dates
+        if (isset($changes['start_date']) && isset($changes['end_date'])) {
+            $start_timestamp = strtotime($changes['start_date']);
+            $end_timestamp = strtotime($changes['end_date']);
+
+            if ($start_timestamp && $end_timestamp) {
+                $summary['dates_configured'] = true;
+                $summary['details']['date_range'] = sprintf(
+                    '%s - %s (%d jours)',
+                    date('d/m/Y', $start_timestamp),
+                    date('d/m/Y', $end_timestamp),
+                    ($end_timestamp - $start_timestamp) / (60 * 60 * 24)
+                );
+            }
+        }
+
+        // Informations sur les jours de la semaine
+        if (!empty($changes['weekdays'])) {
+            $weekday_names_fr = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+            $weekdays = $this->normalizeWeekdays($changes['weekdays']);
+            $selected_days = array_map(fn($idx) => $weekday_names_fr[$idx], $weekdays);
+            $summary['details']['weekdays'] = implode(', ', $selected_days);
+        }
+
+        // Informations sur les dates spécifiques
+        if (!empty($changes['specific'])) {
+            $specific_dates = $this->normalizeDateArray($changes['specific']);
+            $summary['details']['specific_dates_count'] = count($specific_dates);
+            if (count($specific_dates) <= 5) {
+                $formatted_dates = array_map(fn($date) => date('d/m/Y', strtotime($date)), $specific_dates);
+                $summary['details']['specific_dates_list'] = implode(', ', $formatted_dates);
+            }
+        }
+
+        // Informations sur les exclusions
+        if (!empty($changes['exclusions'])) {
+            $exclusion_dates = $this->normalizeDateArray($changes['exclusions']);
+            $summary['details']['exclusions_count'] = count($exclusion_dates);
+            if (count($exclusion_dates) <= 5) {
+                $formatted_dates = array_map(fn($date) => date('d/m/Y', strtotime($date)), $exclusion_dates);
+                $summary['details']['exclusions_list'] = implode(', ', $formatted_dates);
+            }
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Check business rules after merge
+     */
+    private function checkBusinessRules(Availability $existing, Availability $merged, array $changes): void
+    {
+        // Règle existante : dates à la fois spécifiques et exclues
+        $conflicts = array_intersect($merged->getSpecificDates(), $merged->getExclusions());
+        if (!empty($conflicts)) {
+            throw ValidationException::businessRuleViolation(
+                sprintf(
+                    'Dates ne peuvent pas être à la fois spécifiques et exclues : %s',
+                    implode(', ', array_map(function ($date) {
+                        return date('d/m/Y', strtotime($date));
+                    }, $conflicts))
+                )
+            );
+        }
+
+        // 🔥 NOUVELLE RÈGLE : Date de fin antérieure à date de début
+        if (!empty($merged->getStartDate()) && !empty($merged->getEndDate())) {
+            $start_timestamp = strtotime($merged->getStartDate());
+            $end_timestamp = strtotime($merged->getEndDate());
+
+            if ($end_timestamp < $start_timestamp) {
+                throw ValidationException::businessRuleViolation(
+                    sprintf(
+                        'La date de fin (%s) ne peut pas être antérieure à la date de début (%s).',
+                        date('d/m/Y', $end_timestamp),
+                        date('d/m/Y', $start_timestamp)
+                    )
+                );
+            }
+
+            // 🔥 Règle optionnelle : date de début dans le passé
+            $today_timestamp = strtotime(date('Y-m-d'));
+            if ($start_timestamp < $today_timestamp) {
+                // C'est un warning, pas une erreur bloquante
+                // Mais on peut le logger
+                error_log(sprintf(
+                    '[WBE] Warning: Start date %s is in the past',
+                    date('d/m/Y', $start_timestamp)
+                ));
+            }
+        }
+
+        // 🔥 NOUVELLE RÈGLE : Dates spécifiques/exclusions hors plage
+        if (!empty($merged->getStartDate()) && !empty($merged->getEndDate())) {
+            $start_timestamp = strtotime($merged->getStartDate());
+            $end_timestamp = strtotime($merged->getEndDate());
+
+            // Vérifier les dates spécifiques
+            foreach ($merged->getSpecificDates() as $date) {
+                $date_timestamp = strtotime($date);
+                if ($date_timestamp < $start_timestamp || $date_timestamp > $end_timestamp) {
+                    throw ValidationException::businessRuleViolation(
+                        sprintf(
+                            'La date spécifique %s est en dehors de la plage définie.',
+                            date('d/m/Y', $date_timestamp)
+                        )
+                    );
+                }
+            }
+
+            // Vérifier les exclusions
+            foreach ($merged->getExclusions() as $date) {
+                $date_timestamp = strtotime($date);
+                if ($date_timestamp < $start_timestamp || $date_timestamp > $end_timestamp) {
+                    throw ValidationException::businessRuleViolation(
+                        sprintf(
+                            'L\'exclusion %s est en dehors de la plage définie.',
+                            date('d/m/Y', $date_timestamp)
+                        )
+                    );
+                }
+            }
+        }
+
+        // Règle existante : vérifier que les weekdays existent dans la plage
+        if (!empty($merged->getStartDate()) && !empty($merged->getEndDate()) && !empty($merged->getWeekdays())) {
+            $range_days = $this->getDaysBetween($merged->getStartDate(), $merged->getEndDate());
+            $available_in_range = array_intersect($range_days, $merged->getWeekdays());
+
+            if (empty($available_in_range)) {
+                throw ValidationException::businessRuleViolation(
+                    'Aucun des jours de la semaine sélectionnés ne se trouve dans la plage de dates spécifiée'
+                );
+            }
+        }
+    }
+
+    /**
+     * Validate if a string is a valid date in expected format
+     */
+    public function isValidDate(string $date): bool
+    {
+        if (empty($date)) {
+            return false;
+        }
+
+        // Accepter les formats DD/MM/YYYY et YYYY-MM-DD
+        $timestamp = strtotime($date);
+        if ($timestamp === false) {
+            return false;
+        }
+
+        // Vérifier que la date est valide
+        return checkdate(
+            (int) date('m', $timestamp),
+            (int) date('d', $timestamp),
+            (int) date('Y', $timestamp)
+        );
+    }
+
+    /**
+     * Convert date from DD/MM/YYYY to YYYY-MM-DD
+     */
+    public function convertDateToDatabaseFormat(string $date): string
+    {
+        if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $date, $matches)) {
+            return sprintf('%04d-%02d-%02d', $matches[3], $matches[2], $matches[1]);
+        }
+
+        // Si c'est déjà en YYYY-MM-DD, le retourner tel quel
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return $date;
+        }
+
+        // Tenter une conversion avec strtotime
+        $timestamp = strtotime($date);
+        if ($timestamp !== false) {
+            return date('Y-m-d', $timestamp);
+        }
+
+        return '';
+    }
+
+    /**
+     * Normalize a date string to Y-m-d format
+     */
+    private function normalizeDate($date): string
+    {
+        if (empty($date)) {
+            return '';
+        }
+
+        if (is_string($date)) {
+            $date = trim($date);
+        }
+
+        // 🔥 AMÉLIORATION : Accepter DD/MM/YYYY
+        if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $date, $matches)) {
+            $date = sprintf('%04d-%02d-%02d', $matches[3], $matches[2], $matches[1]);
+        }
+
+        $timestamp = strtotime($date);
+        if ($timestamp === false) {
+            return '';
+        }
+
+        return date('Y-m-d', $timestamp);
+    }
+    /**
      * Normalize changes to standard format
      */
     private function normalizeChanges(array $changes): array
@@ -225,67 +603,6 @@ final class AvailabilityService implements ServiceInterface
     }
 
     /**
-     * Check business rules after merge
-     */
-    private function checkBusinessRules(Availability $existing, Availability $merged, array $changes): void
-    {
-        // Rule 1: Cannot have dates in both specific and exclusions
-        $conflicts = array_intersect($merged->getSpecificDates(), $merged->getExclusions());
-        if (!empty($conflicts)) {
-            throw ValidationException::businessRuleViolation(
-                sprintf(
-                    'Dates cannot be both specific and excluded: %s',
-                    implode(', ', $conflicts)
-                )
-            );
-        }
-
-        // Rule 2: If start_date changed, ensure it's before end_date
-        if (isset($changes['start_date']) && !$this->isEmptyValue($changes['start_date'])) {
-            if (!empty($merged->getEndDate()) && $merged->getStartDate() > $merged->getEndDate()) {
-                throw ValidationException::businessRuleViolation(
-                    'Start date must be before end date'
-                );
-            }
-        }
-
-        // Rule 3: If adding exclusions, check they're within date range
-        if (isset($changes['exclusions']) && !$this->isEmptyValue($changes['exclusions'])) {
-            $new_exclusions = $this->normalizeDateArray($changes['exclusions']);
-            foreach ($new_exclusions as $exclusion) {
-                if (!empty($merged->getStartDate()) && $exclusion < $merged->getStartDate()) {
-                    throw ValidationException::businessRuleViolation(
-                        sprintf('Exclusion %s is before start date %s', $exclusion, $merged->getStartDate())
-                    );
-                }
-                if (!empty($merged->getEndDate()) && $exclusion > $merged->getEndDate()) {
-                    throw ValidationException::businessRuleViolation(
-                        sprintf('Exclusion %s is after end date %s', $exclusion, $merged->getEndDate())
-                    );
-                }
-            }
-        }
-
-        // Rule 4: Weekday validation when date range is set
-        if (!empty($merged->getStartDate()) && !empty($merged->getEndDate())) {
-            $start_weekday = date('w', strtotime($merged->getStartDate()));
-            $end_weekday = date('w', strtotime($merged->getEndDate()));
-
-            // If weekdays are specified, ensure range makes sense
-            if (!empty($merged->getWeekdays())) {
-                $range_days = $this->getDaysBetween($merged->getStartDate(), $merged->getEndDate());
-                $available_in_range = array_intersect($range_days, $merged->getWeekdays());
-
-                if (empty($available_in_range)) {
-                    throw ValidationException::businessRuleViolation(
-                        'No selected weekdays fall within the specified date range'
-                    );
-                }
-            }
-        }
-    }
-
-    /**
      * Get all weekdays between two dates
      */
     private function getDaysBetween(string $start, string $end): array
@@ -370,27 +687,6 @@ final class AvailabilityService implements ServiceInterface
                 throw ValidationException::invalidDate('specific', $value);
             }
         }
-    }
-
-    /**
-     * Normalize a date string to Y-m-d format
-     */
-    private function normalizeDate($date): string
-    {
-        if (empty($date)) {
-            return '';
-        }
-
-        if (is_string($date)) {
-            $date = trim($date);
-        }
-
-        $timestamp = strtotime($date);
-        if ($timestamp === false) {
-            return '';
-        }
-
-        return date('Y-m-d', $timestamp);
     }
 
     /**

@@ -1,11 +1,9 @@
 <?php
 /**
- * Plugin Name: Wootour Bulk Editor
- * Plugin URI:  https://example.com/wootour-bulk-editor
+ * Plugin Name: Wootour Edition de masses
  * Description: Bulk edit availability for Wootour products without overwriting existing data
  * Version:     1.0.0
- * Author:      Votre Nom
- * Author URI:  https://example.com
+ * Author:      Intinct Vertical
  * License:     GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: wootour-bulk-editor

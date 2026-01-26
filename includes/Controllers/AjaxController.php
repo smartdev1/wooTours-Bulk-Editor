@@ -143,6 +143,9 @@ final class AjaxController
             case Constants::AJAX_ACTIONS['process_batch']:
                 return $this->handle_process_batch();
 
+            case Constants::AJAX_ACTIONS['search_products']:
+                return $this->handle_search_products();
+
             case Constants::AJAX_ACTIONS['validate_dates']:
                 return $this->handle_validate_dates();
 
@@ -202,6 +205,147 @@ final class AjaxController
             throw new \RuntimeException('Invalid request method.', 400);
         }
     }
+
+    /**
+     * Handle: Search products by product name only
+     */
+    private function handle_search_products(): array
+    {
+        // Récupérer les paramètres
+        $search_term = sanitize_text_field($_REQUEST['search'] ?? '');
+        $limit = min(100, max(1, (int) ($_REQUEST['limit'] ?? 50)));
+
+        // Validation
+        if (empty($search_term) || strlen($search_term) < 2) {
+            return [
+                'success' => true,
+                'data' => [
+                    'products' => [],
+                    'total' => 0,
+                    'message' => 'Veuillez entrer au moins 2 caractères'
+                ]
+            ];
+        }
+
+        try {
+            // Recherche SIMPLE : uniquement dans le titre (post_title)
+            $args = [
+                'post_type'      => ['product', 'product_variation'],
+                'post_status'    => 'publish', // Uniquement les produits publiés
+                's'              => $search_term, // WordPress cherche par défaut dans le titre
+                'posts_per_page' => $limit,
+                'orderby'        => 'title',
+                'order'          => 'ASC',
+                'fields'         => 'ids',
+                'sentence'       => true, // Recherche exacte de phrase
+            ];
+
+            // Forcer la recherche uniquement dans le titre (pas dans le contenu)
+            add_filter('posts_search', function ($search, $wp_query) use ($search_term) {
+                global $wpdb;
+
+                if ($wp_query->is_search() && !empty($search_term)) {
+                    // Recherche uniquement dans post_title
+                    $search = $wpdb->prepare(
+                        " AND {$wpdb->posts}.post_title LIKE %s",
+                        '%' . $wpdb->esc_like($search_term) . '%'
+                    );
+                }
+
+                return $search;
+            }, 10, 2);
+
+            $query = new \WP_Query($args);
+
+            // Retirer le filtre après la requête
+            remove_all_filters('posts_search');
+
+            $products = [];
+            foreach ($query->posts as $product_id) {
+                $product = wc_get_product($product_id);
+                if (!$product) continue;
+
+                // Récupérer l'image
+                $image_id = $product->get_image_id();
+                $image_url = $image_id ? wp_get_attachment_image_url($image_id, 'thumbnail') : wc_placeholder_img_src('thumbnail');
+
+                // Informations de base
+                $product_data = [
+                    'id' => $product_id,
+                    'name' => $product->get_name(),
+                    'sku' => $product->get_sku() ?: '-',
+                    'type' => $product->get_type(),
+                    'price' => $product->get_price(),
+                    'regular_price' => $product->get_regular_price(),
+                    'sale_price' => $product->get_sale_price(),
+                    'stock_status' => $product->get_stock_status(),
+                    'stock_quantity' => $product->get_stock_quantity(),
+                    'image' => $image_url,
+                    'edit_link' => get_edit_post_link($product_id, ''),
+                    'view_link' => get_permalink($product_id),
+                ];
+
+                // Si c'est une variation, ajouter les infos du parent
+                if ($product->get_type() === 'variation') {
+                    $parent_id = $product->get_parent_id();
+                    $parent_product = wc_get_product($parent_id);
+                    if ($parent_product) {
+                        $product_data['parent'] = [
+                            'id' => $parent_id,
+                            'name' => $parent_product->get_name(),
+                            'sku' => $parent_product->get_sku(),
+                            'edit_link' => get_edit_post_link($parent_id, ''),
+                        ];
+
+                        // Pour les variations, montrer les attributs
+                        $attributes = $product->get_attributes();
+                        if (!empty($attributes)) {
+                            $attribute_list = [];
+                            foreach ($attributes as $name => $value) {
+                                $attribute_list[] = [
+                                    'name' => wc_attribute_label($name),
+                                    'value' => $value,
+                                ];
+                            }
+                            $product_data['attributes'] = $attribute_list;
+                        }
+                    }
+                }
+
+                // Récupérer la disponibilité WooTours si disponible
+                $wootour_availability = null;
+                if (Constants::is_wootour_active()) {
+                    $meta_key = Constants::get_verified_meta_key();
+                    if ($meta_key) {
+                        $wootour_availability = get_post_meta($product_id, $meta_key, true);
+                        $product_data['has_wootour'] = !empty($wootour_availability);
+                    }
+                }
+
+                $products[] = $product_data;
+            }
+
+            return [
+                'success' => true,
+                'data' => [
+                    'products' => $products,
+                    'total' => count($products),
+                    'found' => $query->found_posts,
+                    'search_term' => $search_term,
+                    'limit' => $limit,
+                ]
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'data' => [
+                    'products' => [],
+                    'message' => 'Erreur lors de la recherche: ' . $e->getMessage()
+                ]
+            ];
+        }
+    }
+
     /**
      * Get action from request
      */
@@ -325,27 +469,236 @@ final class AjaxController
     }
 
     /**
-     * Handle: Validate dates and changes
+     * Handle: Validate dates before moving to step 3
      */
     private function handle_validate_dates(): array
     {
-        $changes = $this->parse_changes();
+        try {
+            // Parse et valider les données
+            $changes = $this->parse_changes();
 
-        // Validate changes structure
-        $this->availability_service->validateChanges($changes);
+            // Validation simple mais efficace
+            $errors = $this->validate_for_step2($changes);
 
-        // Check for conflicts in empty availability (basic validation)
-        $empty_availability = new \WootourBulkEditor\Models\Availability();
-        $conflicts = $this->availability_service->calculateConflicts($empty_availability, $changes);
+            if (!empty($errors)) {
+                return [
+                    'success' => false,
+                    'data' => [
+                        'valid' => false,
+                        'errors' => $errors,
+                        'changes' => $changes
+                    ]
+                ];
+            }
 
-        return [
-            'success' => true,
-            'data' => [
-                'valid' => empty(array_filter($conflicts, fn($c) => $c['type'] === 'error')),
-                'conflicts' => $conflicts,
-                'changes' => $changes,
-            ],
+            return [
+                'success' => true,
+                'data' => [
+                    'valid' => true,
+                    'changes' => $changes,
+                    'summary' => $this->generate_step2_summary($changes)
+                ]
+            ];
+        } catch (ValidationException $e) {
+            return [
+                'success' => false,
+                'data' => [
+                    'valid' => false,
+                    'errors' => [$e->getMessage()]
+                ]
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'data' => [
+                    'valid' => false,
+                    'errors' => ['Une erreur technique est survenue. Veuillez réessayer.']
+                ]
+            ];
+        }
+    }
+
+    /**
+     * Validation spécifique pour l'étape 2
+     */
+    private function validate_for_step2(array $changes): array
+    {
+        $errors = [];
+
+        // 1. Vérifier qu'au moins une règle est définie
+        $hasDates = !empty($changes['start_date']) && !empty($changes['end_date']);
+        $hasWeekdays = !empty($changes['weekdays']);
+        $hasSpecific = !empty($changes['specific']);
+
+        if (!$hasDates && !$hasWeekdays && !$hasSpecific) {
+            $errors[] = 'Veuillez définir au moins une règle de disponibilité (période, jours de la semaine, ou dates spécifiques).';
+        }
+
+        // 2. Si une plage de dates est définie, la valider
+        if (isset($changes['start_date']) && isset($changes['end_date'])) {
+            if (empty($changes['start_date'])) {
+                $errors[] = 'La date de début est requise si vous définissez une période.';
+            }
+            if (empty($changes['end_date'])) {
+                $errors[] = 'La date de fin est requise si vous définissez une période.';
+            }
+
+            // Valider la plage si les deux dates sont présentes
+            if (!empty($changes['start_date']) && !empty($changes['end_date'])) {
+                try {
+                    $this->validate_date_range($changes['start_date'], $changes['end_date']);
+                } catch (ValidationException $e) {
+                    $errors[] = $e->getMessage();
+                }
+            }
+        }
+
+        // 3. Vérifier les conflits de dates
+        if (!empty($changes['specific']) && !empty($changes['exclusions'])) {
+            $conflicts = array_intersect($changes['specific'], $changes['exclusions']);
+            if (!empty($conflicts)) {
+                $errors[] = 'Certaines dates sont à la fois marquées comme disponibles et exclues. Veuillez corriger cette incohérence.';
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Génère un résumé pour l'étape 3
+     */
+    private function generate_step2_summary(array $changes): array
+    {
+        $summary = [];
+
+        // Plage de dates
+        if (!empty($changes['start_date']) && !empty($changes['end_date'])) {
+            $startFr = date('d/m/Y', strtotime($changes['start_date']));
+            $endFr = date('d/m/Y', strtotime($changes['end_date']));
+            $days = floor((strtotime($changes['end_date']) - strtotime($changes['start_date'])) / (60 * 60 * 24)) + 1;
+
+            $summary['period'] = [
+                'start' => $startFr,
+                'end' => $endFr,
+                'days' => $days,
+                'text' => "Du $startFr au $endFr ($days jour" . ($days > 1 ? 's' : '') . ")"
+            ];
+        }
+
+        // Jours de la semaine
+        if (!empty($changes['weekdays'])) {
+            $dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+            $selectedDays = array_map(function ($index) use ($dayNames) {
+                return $dayNames[$index] ?? 'Jour ' . $index;
+            }, $changes['weekdays']);
+
+            $summary['weekdays'] = [
+                'count' => count($changes['weekdays']),
+                'days' => $selectedDays,
+                'text' => implode(', ', $selectedDays)
+            ];
+        }
+
+        // Dates spécifiques
+        if (!empty($changes['specific'])) {
+            $formattedDates = array_map(function ($date) {
+                return date('d/m/Y', strtotime($date));
+            }, $changes['specific']);
+
+            $summary['specific'] = [
+                'count' => count($changes['specific']),
+                'dates' => $formattedDates,
+                'text' => implode(', ', $formattedDates)
+            ];
+        }
+
+        // Exclusions
+        if (!empty($changes['exclusions'])) {
+            $formattedDates = array_map(function ($date) {
+                return date('d/m/Y', strtotime($date));
+            }, $changes['exclusions']);
+
+            $summary['exclusions'] = [
+                'count' => count($changes['exclusions']),
+                'dates' => $formattedDates,
+                'text' => implode(', ', $formattedDates)
+            ];
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Check if dates are within the specified range
+     */
+    private function check_dates_in_range(array $dates, string $start_date, string $end_date): array
+    {
+        $conflicts = [];
+        $start_timestamp = strtotime($start_date);
+        $end_timestamp = strtotime($end_date);
+
+        foreach ($dates as $date) {
+            $date_timestamp = strtotime($date);
+
+            if ($date_timestamp < $start_timestamp || $date_timestamp > $end_timestamp) {
+                $conflicts[] = [
+                    'type' => 'warning',
+                    'message' => sprintf(
+                        'La date %s est en dehors de la plage définie (%s - %s).',
+                        date('d/m/Y', $date_timestamp),
+                        date('d/m/Y', $start_timestamp),
+                        date('d/m/Y', $end_timestamp)
+                    ),
+                    'date' => $date,
+                    'field' => 'range',
+                ];
+            }
+        }
+
+        return $conflicts;
+    }
+
+    /**
+     * Generate a summary of validation results
+     */
+    private function generate_validation_summary(array $changes, array $conflicts): array
+    {
+        $error_count = count(array_filter($conflicts, fn($c) => $c['type'] === 'error'));
+        $warning_count = count(array_filter($conflicts, fn($c) => $c['type'] === 'warning'));
+
+        $summary = [
+            'dates_configured' => false,
+            'has_errors' => $error_count > 0,
+            'has_warnings' => $warning_count > 0,
+            'error_count' => $error_count,
+            'warning_count' => $warning_count,
         ];
+
+        // Vérifier ce qui est configuré
+        if (isset($changes['start_date']) && isset($changes['end_date'])) {
+            $summary['date_range'] = sprintf(
+                '%s - %s',
+                date('d/m/Y', strtotime($changes['start_date'])),
+                date('d/m/Y', strtotime($changes['end_date']))
+            );
+            $summary['dates_configured'] = true;
+        }
+
+        if (!empty($changes['weekdays'])) {
+            $weekday_names = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+            $selected_days = array_map(fn($idx) => $weekday_names[$idx], $changes['weekdays']);
+            $summary['weekdays'] = implode(', ', $selected_days);
+        }
+
+        if (!empty($changes['specific'])) {
+            $summary['specific_dates_count'] = count($changes['specific']);
+        }
+
+        if (!empty($changes['exclusions'])) {
+            $summary['exclusions_count'] = count($changes['exclusions']);
+        }
+
+        return $summary;
     }
 
     /**
@@ -562,10 +915,164 @@ final class AjaxController
             }
         }
 
+        // Traiter les dates spécifiques et exclusions (qui peuvent venir comme chaînes)
+        foreach (['specific', 'exclusions'] as $date_field) {
+            if (isset($changes[$date_field]) && is_string($changes[$date_field])) {
+                $dates = explode(',', $changes[$date_field]);
+                $converted_dates = [];
+
+                foreach ($dates as $date) {
+                    $date = trim($date);
+                    if (empty($date)) continue;
+
+                    // Convertir DD/MM/YYYY en YYYY-MM-DD si nécessaire
+                    if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $date, $matches)) {
+                        $converted_date = sprintf('%04d-%02d-%02d', $matches[3], $matches[2], $matches[1]);
+                        $converted_dates[] = $converted_date;
+                    } elseif (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                        $converted_dates[] = $date;
+                    }
+                }
+
+                $changes[$date_field] = $converted_dates;
+            }
+        }
+
         error_log('[WBE AjaxController] Final parsed changes: ' . print_r($changes, true));
-        error_log('[WBE AjaxController] === END parse_changes ===');
+
+        // 🔥 VALIDATION DES DATES
+        if (isset($changes['start_date']) && isset($changes['end_date'])) {
+            $this->validate_date_range($changes['start_date'], $changes['end_date']);
+        }
+
+        // 🔥 VALIDATION DES CONFLITS (dates spécifiques vs exclusions)
+        if (!empty($changes['specific']) && !empty($changes['exclusions'])) {
+            $specific_dates = $changes['specific'];
+            $exclusion_dates = $changes['exclusions'];
+
+            $conflicts = array_intersect($specific_dates, $exclusion_dates);
+            if (!empty($conflicts)) {
+                $conflict_dates = array_map(function ($date) {
+                    return date('d/m/Y', strtotime($date));
+                }, $conflicts);
+
+                throw new ValidationException(
+                    sprintf(
+                        'Les dates suivantes sont à la fois spécifiques et exclues : %s',
+                        implode(', ', $conflict_dates)
+                    )
+                );
+            }
+        }
+
+        error_log('[WBE AjaxController] === END parse_changes (validation passed) ===');
 
         return $changes;
+    }
+
+
+    /**
+     * Validate that specific/exclusion dates are within date range
+     */
+    private function validate_dates_in_range(array $dates, string $start_date, string $end_date): void
+    {
+        $start_timestamp = strtotime($start_date);
+        $end_timestamp = strtotime($end_date);
+
+        foreach ($dates as $date) {
+            $date_timestamp = strtotime($date);
+
+            if ($date_timestamp === false) {
+                throw new ValidationException(
+                    sprintf('Date invalide dans la liste : %s', $date)
+                );
+            }
+
+            if ($date_timestamp < $start_timestamp) {
+                throw new ValidationException(
+                    sprintf(
+                        'La date %s est antérieure à la date de début (%s).',
+                        date('d/m/Y', $date_timestamp),
+                        date('d/m/Y', $start_timestamp)
+                    )
+                );
+            }
+
+            if ($date_timestamp > $end_timestamp) {
+                throw new ValidationException(
+                    sprintf(
+                        'La date %s est postérieure à la date de fin (%s).',
+                        date('d/m/Y', $date_timestamp),
+                        date('d/m/Y', $end_timestamp)
+                    )
+                );
+            }
+        }
+    }
+
+    /**
+     * Validate date range
+     * @throws ValidationException
+     */
+    private function validate_date_range(string $start_date, string $end_date): void
+    {
+        // Vérifier que les dates sont au bon format
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start_date)) {
+            throw new ValidationException(
+                sprintf('Format de date de début invalide : %s. Utilisez JJ/MM/AAAA.', $start_date)
+            );
+        }
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $end_date)) {
+            throw new ValidationException(
+                sprintf('Format de date de fin invalide : %s. Utilisez JJ/MM/AAAA.', $end_date)
+            );
+        }
+
+        // Convertir en timestamps pour comparaison
+        $start_timestamp = strtotime($start_date);
+        $end_timestamp = strtotime($end_date);
+
+        if ($start_timestamp === false) {
+            throw new ValidationException('Date de début invalide.');
+        }
+
+        if ($end_timestamp === false) {
+            throw new ValidationException('Date de fin invalide.');
+        }
+
+        // 🔥 Validation principale : date de fin ne doit pas être antérieure à date de début
+        if ($end_timestamp < $start_timestamp) {
+            throw new ValidationException(
+                sprintf(
+                    'La date de fin (%s) ne peut pas être antérieure à la date de début (%s).',
+                    date('d/m/Y', $end_timestamp),
+                    date('d/m/Y', $start_timestamp)
+                )
+            );
+        }
+
+        // Optionnel : vérifier que la date de début n'est pas dans le passé
+        $today_timestamp = strtotime(date('Y-m-d'));
+        if ($start_timestamp < $today_timestamp) {
+            throw new ValidationException(
+                'La date de début ne peut pas être dans le passé.'
+            );
+        }
+
+        // Optionnel : limiter la plage à une durée raisonnable (ex: 2 ans)
+        $max_days = 730; // 2 ans
+        $days_diff = ($end_timestamp - $start_timestamp) / (60 * 60 * 24);
+        if ($days_diff > $max_days) {
+            throw new ValidationException(
+                sprintf(
+                    'La plage de dates est trop longue (%d jours maximum).',
+                    $max_days
+                )
+            );
+        }
+
+        error_log('[WBE AjaxController] Date range validation passed: ' . $start_date . ' to ' . $end_date);
     }
 
     /**

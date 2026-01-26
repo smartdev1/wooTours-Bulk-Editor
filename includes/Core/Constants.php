@@ -61,10 +61,15 @@ final class Constants
 
     /** Actions AJAX */
     public const AJAX_ACTIONS = [
-        'process_batch'  => 'wbe_process_batch',
-        'get_products'   => 'wbe_get_products',
+        'get_products' => 'wbe_get_products',
         'get_categories' => 'wbe_get_categories',
+        'process_batch' => 'wbe_process_batch',
+        'search_products' => 'wbe_search_products',
         'validate_dates' => 'wbe_validate_dates',
+        'get_progress' => 'wbe_get_progress',
+        'preview_changes' => 'wbe_preview_changes',
+        'cancel_operation' => 'wbe_cancel_operation',
+        'resume_operation' => 'wbe_resume_operation',
     ];
 
     /**
@@ -170,12 +175,12 @@ final class Constants
         if (defined('WOO_TOUR_PATH')) {
             return true;
         }
-        
+
         // Method 2: Check if the main class exists
         if (class_exists('EX_WooTour')) {
             return true;
         }
-        
+
         // Method 3: Check if the plugin file exists and is active
         if (function_exists('is_plugin_active')) {
             // Try common WooTours plugin paths
@@ -184,22 +189,22 @@ final class Constants
                 'woo-tour/wootour.php',
                 'wootours/wootour.php',
             ];
-            
+
             foreach ($possible_paths as $path) {
                 if (is_plugin_active($path)) {
                     return true;
                 }
             }
         }
-        
+
         // Method 4: Check if WooTours function exists
         if (function_exists('wt_get_plugin_url')) {
             return true;
         }
-        
+
         return false;
     }
-    
+
     /**
      * Get WooTours version if available
      * 
@@ -210,25 +215,25 @@ final class Constants
         if (!self::is_wootour_active()) {
             return null;
         }
-        
+
         // WooTours doesn't define a VERSION constant, but we can get it from plugin data
         if (!function_exists('get_plugin_data')) {
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
         }
-        
+
         $possible_paths = [
             WP_PLUGIN_DIR . '/wootour/wootour.php',
             WP_PLUGIN_DIR . '/woo-tour/wootour.php',
             WP_PLUGIN_DIR . '/wootours/wootour.php',
         ];
-        
+
         foreach ($possible_paths as $path) {
             if (file_exists($path)) {
                 $plugin_data = get_plugin_data($path, false, false);
                 return $plugin_data['Version'] ?? null;
             }
         }
-        
+
         return null;
     }
 
@@ -269,23 +274,23 @@ final class Constants
         if (!self::is_wootour_active()) {
             $version = self::get_wootour_version();
             $message = 'WooTours plugin not detected - limited functionality';
-            
+
             error_log('[WootourBulkEditor] Warning: ' . $message);
-            
+
             // Add admin notice
-            add_action('admin_notices', function() {
-                ?>
+            add_action('admin_notices', function () {
+?>
                 <div class="notice notice-warning is-dismissible">
                     <p>
-                        <strong>Wootour Bulk Editor:</strong> 
+                        <strong>Wootour Bulk Editor:</strong>
                         Le plugin WooTours n'est pas détecté. Le plugin fonctionnera en mode limité.
                     </p>
                     <p>
-                        Pour une utilisation complète, veuillez installer et activer le plugin 
+                        Pour une utilisation complète, veuillez installer et activer le plugin
                         <strong>WooTours</strong> (par ExThemes).
                     </p>
                 </div>
-                <?php
+<?php
             });
         } else {
             // Log successful detection

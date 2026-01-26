@@ -342,8 +342,23 @@ class AdminController
                             </div>
                         </div>
 
+                        <!-- ... Code existant ... -->
+
                         <div class="wbe-section">
                             <h3><?php _e('Dates Spécifiques', Constants::TEXT_DOMAIN); ?></h3>
+
+                            <!-- AJOUTER: Zone d'ajout de date -->
+                            <div class="wbe-add-date">
+                                <div class="wbe-date-field">
+                                    <label for="wbe-add-specific-date"><?php _e('Ajouter une date', Constants::TEXT_DOMAIN); ?></label>
+                                    <input type="text" id="wbe-add-specific-date" class="wbe-datepicker" placeholder="<?php _e('Cliquez pour choisir une date', Constants::TEXT_DOMAIN); ?>" readonly>
+                                    <button type="button" id="wbe-add-specific-btn" class="button button-primary">
+                                        <?php _e('Ajouter', Constants::TEXT_DOMAIN); ?>
+                                    </button>
+                                </div>
+                                <p class="description"><?php _e('Ajoutez des dates spécifiques où l\'activité sera disponible.', Constants::TEXT_DOMAIN); ?></p>
+                            </div>
+
                             <div class="wbe-selected-dates">
                                 <h4><?php _e('Dates Sélectionnées', Constants::TEXT_DOMAIN); ?>:</h4>
                                 <div id="wbe-specific-dates-list" class="wbe-dates-list"></div>
@@ -355,6 +370,19 @@ class AdminController
 
                         <div class="wbe-section">
                             <h3><?php _e('Exclure des Dates', Constants::TEXT_DOMAIN); ?></h3>
+
+                            <!-- AJOUTER: Zone d'ajout de date d'exclusion -->
+                            <div class="wbe-add-date">
+                                <div class="wbe-date-field">
+                                    <label for="wbe-add-exclusion-date"><?php _e('Ajouter une date à exclure', Constants::TEXT_DOMAIN); ?></label>
+                                    <input type="text" id="wbe-add-exclusion-date" class="wbe-datepicker" placeholder="<?php _e('Cliquez pour choisir une date', Constants::TEXT_DOMAIN); ?>" readonly>
+                                    <button type="button" id="wbe-add-exclusion-btn" class="button button-primary">
+                                        <?php _e('Ajouter', Constants::TEXT_DOMAIN); ?>
+                                    </button>
+                                </div>
+                                <p class="description"><?php _e('Ajoutez des dates spécifiques où l\'activité ne sera PAS disponible.', Constants::TEXT_DOMAIN); ?></p>
+                            </div>
+
                             <div class="wbe-selected-dates">
                                 <h4><?php _e('Dates Exclues', Constants::TEXT_DOMAIN); ?>:</h4>
                                 <div id="wbe-exclusions-list" class="wbe-dates-list"></div>
@@ -366,14 +394,23 @@ class AdminController
                     </div>
                 </div>
 
+                <!-- Dans la section de l'étape 2 -->
                 <div class="wbe-step-actions">
                     <button class="button wbe-prev-step" data-prev="1">
                         <?php _e('← Retour', Constants::TEXT_DOMAIN); ?>
                     </button>
-                    <button class="button button-primary wbe-next-step" data-next="3">
-                        <?php _e('Suivant: Révision →', Constants::TEXT_DOMAIN); ?>
+                    <button class="button button-primary wbe-next-step" data-next="3" id="wbe-validate-and-next">
+                        <span class="wbe-validation-spinner" style="display: none;">
+                            <span class="spinner is-active" style="margin: 0 5px"></span>
+                        </span>
+                        <span class="wbe-button-text">
+                            <?php _e('Suivant: Révision →', Constants::TEXT_DOMAIN); ?>
+                        </span>
                     </button>
                 </div>
+
+                <!-- Ajouter une zone pour les messages d'erreur -->
+                <div id="wbe-step2-errors" style="display: none;"></div>
             </section>
 
             <!-- STEP 3: Review & Apply -->
