@@ -6,7 +6,7 @@
  * 
  * @package     WootourBulkEditor
  * @subpackage  Views
- * @author      Votre Nom <email@example.com>
+ 
  * @license     GPL-2.0+
  * @since       1.0.0
  */
@@ -89,7 +89,7 @@ defined('ABSPATH') || exit;
                         <?php if ($product->getSku()): ?>
                             <code><?php echo esc_html($product->getSku()); ?></code>
                         <?php else: ?>
-                            <span class="wbe-empty">—</span>
+                            <span class="wbe-empty">**—</span>
                         <?php endif; ?>
                     </td>
                     <td>
@@ -109,14 +109,14 @@ defined('ABSPATH') || exit;
                                 <?php endif; ?>
                             </div>
                         <?php else: ?>
-                            <span class="wbe-empty">—</span>
+                            <span class="wbe-empty">**—</span>
                         <?php endif; ?>
                     </td>
                     <td>
                         <?php if ($product->getPrice()): ?>
                             <?php echo wc_price($product->getPrice()); ?>
                         <?php else: ?>
-                            <span class="wbe-empty">—</span>
+                            <span class="wbe-empty">**—</span>
                         <?php endif; ?>
                     </td>
                     <td>

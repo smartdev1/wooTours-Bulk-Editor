@@ -158,7 +158,7 @@ final class AvailabilityService implements ServiceInterface
             $results['valid'] = false;
         }
 
-        // 🔥 Validation avancée des dates
+        //  Validation avancée des dates
 
         // 1. Validation de la plage de dates (start_date vs end_date)
         if (isset($changes['start_date']) && isset($changes['end_date'])) {
@@ -370,7 +370,7 @@ final class AvailabilityService implements ServiceInterface
             );
         }
 
-        // 🔥 NOUVELLE RÈGLE : Date de fin antérieure à date de début
+        //  NOUVELLE RÈGLE : Date de fin antérieure à date de début
         if (!empty($merged->getStartDate()) && !empty($merged->getEndDate())) {
             $start_timestamp = strtotime($merged->getStartDate());
             $end_timestamp = strtotime($merged->getEndDate());
@@ -385,7 +385,7 @@ final class AvailabilityService implements ServiceInterface
                 );
             }
 
-            // 🔥 Règle optionnelle : date de début dans le passé
+            //  Règle optionnelle : date de début dans le passé
             $today_timestamp = strtotime(date('Y-m-d'));
             if ($start_timestamp < $today_timestamp) {
                 // C'est un warning, pas une erreur bloquante
@@ -397,7 +397,7 @@ final class AvailabilityService implements ServiceInterface
             }
         }
 
-        // 🔥 NOUVELLE RÈGLE : Dates spécifiques/exclusions hors plage
+        //  NOUVELLE RÈGLE : Dates spécifiques/exclusions hors plage
         if (!empty($merged->getStartDate()) && !empty($merged->getEndDate())) {
             $start_timestamp = strtotime($merged->getStartDate());
             $end_timestamp = strtotime($merged->getEndDate());
@@ -501,7 +501,7 @@ final class AvailabilityService implements ServiceInterface
             $date = trim($date);
         }
 
-        // 🔥 AMÉLIORATION : Accepter DD/MM/YYYY
+        //  AMÉLIORATION : Accepter DD/MM/YYYY
         if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $date, $matches)) {
             $date = sprintf('%04d-%02d-%02d', $matches[3], $matches[2], $matches[1]);
         }

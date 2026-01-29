@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Wootour Edition de masses
  * Description: Bulk edit availability for Wootour products without overwriting existing data
- * Version:     1.0.0
+ * Version:     2.1.3
  * Author:      Intinct Vertical
  * License:     GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -19,6 +19,140 @@
 defined('ABSPATH') || exit;
 
 /**
+ * Clear OPcache for this plugin's files
+ * 
+ * @return array Status of the operation
+ */
+function wootour_bulk_editor_clear_opcache(): array
+{
+    $result = [
+        'success' => false,
+        'message' => '',
+        'method' => '',
+        'files_cleared' => 0
+    ];
+    
+    // Check if OPcache is available
+    if (!function_exists('opcache_reset') && !function_exists('opcache_invalidate')) {
+        $result['message'] = 'OPcache not available on this server';
+        return $result;
+    }
+    
+    // Method 1: Try to reset entire OPcache (requires permissions)
+    if (function_exists('opcache_reset')) {
+        try {
+            if (@opcache_reset()) {
+                $result['success'] = true;
+                $result['method'] = 'opcache_reset';
+                $result['message'] = 'OPcache completely cleared via opcache_reset()';
+                error_log('[WootourBulkEditor] OPcache cleared successfully via opcache_reset()');
+                return $result;
+            }
+        } catch (\Throwable $e) {
+            error_log('[WootourBulkEditor] opcache_reset() failed: ' . $e->getMessage());
+        }
+    }
+    
+    // Method 2: Invalidate plugin files individually (fallback)
+    if (function_exists('opcache_invalidate')) {
+        $result['method'] = 'opcache_invalidate';
+        $plugin_dir = plugin_dir_path(__FILE__);
+        $cleared = 0;
+        
+        try {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($plugin_dir, RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+            
+            foreach ($iterator as $file) {
+                if ($file->isFile() && $file->getExtension() === 'php') {
+                    if (@opcache_invalidate($file->getPathname(), true)) {
+                        $cleared++;
+                    }
+                }
+            }
+            
+            $result['success'] = true;
+            $result['files_cleared'] = $cleared;
+            $result['message'] = sprintf('OPcache cleared for %d PHP files via opcache_invalidate()', $cleared);
+            error_log(sprintf('[WootourBulkEditor] OPcache cleared for %d files via opcache_invalidate()', $cleared));
+            
+        } catch (\Throwable $e) {
+            $result['message'] = 'Failed to clear OPcache: ' . $e->getMessage();
+            error_log('[WootourBulkEditor] opcache_invalidate() failed: ' . $e->getMessage());
+        }
+    } else {
+        $result['message'] = 'No OPcache clearing method available';
+    }
+    
+    return $result;
+}
+
+/**
+ * Clear all caches (OPcache + WordPress object cache)
+ * 
+ * @return void
+ */
+function wootour_bulk_editor_clear_all_caches(): void
+{
+    // Clear OPcache
+    $opcache_result = wootour_bulk_editor_clear_opcache();
+    
+    // Clear WordPress object cache
+    if (function_exists('wp_cache_flush')) {
+        wp_cache_flush();
+        error_log('[WootourBulkEditor] WordPress object cache flushed');
+    }
+    
+    // Clear transients
+    global $wpdb;
+    $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_wootour%' OR option_name LIKE '_transient_timeout_wootour%'");
+    
+    // Log the complete operation
+    error_log(sprintf(
+        '[WootourBulkEditor] All caches cleared - OPcache: %s, Method: %s',
+        $opcache_result['success'] ? 'Yes' : 'No',
+        $opcache_result['method']
+    ));
+}
+
+/**
+ * Plugin activation hook
+ * 
+ * @return void
+ */
+function wootour_bulk_editor_activate(): void
+{
+    error_log('[WootourBulkEditor] Plugin activation started');
+    
+    // Clear OPcache on activation
+    wootour_bulk_editor_clear_all_caches();
+    
+    // Set activation timestamp
+    update_option('wootour_bulk_editor_activated_at', time());
+    update_option('wootour_bulk_editor_version', '2.1.3');
+    
+    error_log('[WootourBulkEditor] Plugin activated successfully');
+}
+register_activation_hook(__FILE__, 'wootour_bulk_editor_activate');
+
+/**
+ * Plugin deactivation hook
+ * 
+ * @return void
+ */
+function wootour_bulk_editor_deactivate(): void
+{
+    error_log('[WootourBulkEditor] Plugin deactivation started');
+    
+    // Clear OPcache on deactivation
+    wootour_bulk_editor_clear_all_caches();
+    
+    error_log('[WootourBulkEditor] Plugin deactivated successfully');
+}
+register_deactivation_hook(__FILE__, 'wootour_bulk_editor_deactivate');
+
+/**
  * Main plugin bootstrap function
  * 
  * @return WootourBulkEditor\Core\Plugin|null
@@ -29,50 +163,54 @@ function wootour_bulk_editor(): ?WootourBulkEditor\Core\Plugin
     
     if (null === $plugin) {
         try {
-            // Manually load core files needed for bootstrap
             $base_dir = __DIR__;
             
-            // Load Singleton trait first (if Plugin uses it)
+            // Log initialization
+            error_log('[WootourBulkEditor] Initializing plugin from: ' . $base_dir);
+            
+            // Load Singleton trait
             $singleton_file = $base_dir . '/includes/Core/Traits/Singleton.php';
             if (file_exists($singleton_file)) {
                 require_once $singleton_file;
             }
             
-            // Load Autoloader class
+            // Load Autoloader
             $autoloader_file = $base_dir . '/includes/Core/Autoloader.php';
             if (!file_exists($autoloader_file)) {
                 throw new \RuntimeException('Autoloader class not found at: ' . $autoloader_file);
             }
             require_once $autoloader_file;
             
-            // Load Constants class (needed by Plugin)
+            // Load Constants
             $constants_file = $base_dir . '/includes/Core/Constants.php';
             if (!file_exists($constants_file)) {
                 throw new \RuntimeException('Constants class not found at: ' . $constants_file);
             }
             require_once $constants_file;
-            
+
             // Load Plugin class
             $plugin_file = $base_dir . '/includes/Core/Plugin.php';
             if (!file_exists($plugin_file)) {
                 throw new \RuntimeException('Plugin class not found at: ' . $plugin_file);
             }
             require_once $plugin_file;
-            
-            // Now we can safely instantiate and initialize
+
+            // Initialize plugin
             $plugin = WootourBulkEditor\Core\Plugin::getInstance();
             $plugin->init();
             
+            error_log('[WootourBulkEditor] Plugin initialized successfully');
+            
         } catch (\Throwable $e) {
-            // Log error but don't crash the site
+            // Log error
             error_log(sprintf(
-                'Wootour Bulk Editor failed to initialize: %s in %s:%s',
+                '[WootourBulkEditor] Failed to initialize: %s in %s:%s',
                 $e->getMessage(),
                 $e->getFile(),
                 $e->getLine()
             ));
             
-            // Show admin notice if in admin area
+            // Show admin notice
             if (is_admin()) {
                 add_action('admin_notices', function () use ($e) {
                     ?>
@@ -80,6 +218,9 @@ function wootour_bulk_editor(): ?WootourBulkEditor\Core\Plugin
                         <p>
                             <strong>Wootour Bulk Editor Error:</strong> 
                             <?php echo esc_html($e->getMessage()); ?>
+                        </p>
+                        <p>
+                            <em>Check error logs for more details.</em>
                         </p>
                     </div>
                     <?php
@@ -93,7 +234,6 @@ function wootour_bulk_editor(): ?WootourBulkEditor\Core\Plugin
     return $plugin;
 }
 
-// Initialize plugin on plugins_loaded hook
 add_action('plugins_loaded', 'wootour_bulk_editor', 10);
 
 /**
@@ -105,3 +245,94 @@ function wbe(): ?WootourBulkEditor\Core\Plugin
 {
     return wootour_bulk_editor();
 }
+
+/**
+ * Add admin notice after plugin update to inform about cache clearing
+ * 
+ * @return void
+ */
+add_action('admin_notices', function () {
+    // Only show to administrators
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+    
+    // Check if we just updated
+    $current_version = get_option('wootour_bulk_editor_version');
+    $plugin_version = '2.1.3';
+    
+    if (version_compare($current_version, $plugin_version, '<')) {
+        // Clear caches after update
+        wootour_bulk_editor_clear_all_caches();
+        
+        // Update version
+        update_option('wootour_bulk_editor_version', $plugin_version);
+        
+        // Show notice
+        ?>
+        <div class="notice notice-success is-dismissible">
+            <p>
+                <strong>Wootour Bulk Editor:</strong> Plugin mis à jour vers la version <?php echo esc_html($plugin_version); ?>.
+                Les caches ont été vidés automatiquement.
+            </p>
+        </div>
+        <?php
+    }
+});
+
+/**
+ * Add a debug action to manually clear caches (for development)
+ * This can be triggered via URL: /wp-admin/?wbe_clear_cache=1&wbe_nonce=xxx
+ */
+if (defined('WP_DEBUG') && WP_DEBUG) {
+    add_action('admin_init', function () {
+        if (isset($_GET['wbe_clear_cache']) && current_user_can('manage_options')) {
+            // Verify nonce for security
+            if (!isset($_GET['wbe_nonce']) || !wp_verify_nonce($_GET['wbe_nonce'], 'wbe_clear_cache')) {
+                wp_die('Invalid security token');
+            }
+            
+            // Clear all caches
+            $result = wootour_bulk_editor_clear_opcache();
+            wootour_bulk_editor_clear_all_caches();
+            
+            // Show result
+            add_action('admin_notices', function () use ($result) {
+                ?>
+                <div class="notice notice-success">
+                    <p><strong>Cache Cleared!</strong></p>
+                    <ul>
+                        <li>OPcache: <?php echo $result['success'] ? '✅ Cleared' : '❌ Failed'; ?></li>
+                        <li>Method: <?php echo esc_html($result['method']); ?></li>
+                        <li>Message: <?php echo esc_html($result['message']); ?></li>
+                    </ul>
+                </div>
+                <?php
+            });
+        }
+    });
+}
+
+/**
+ * Display OPcache status in plugin row (for admins)
+ */
+add_filter('plugin_row_meta', function ($plugin_meta, $plugin_file) {
+    if (plugin_basename(__FILE__) === $plugin_file && current_user_can('manage_options')) {
+        $opcache_status = function_exists('opcache_get_status') ? opcache_get_status(false) : false;
+        
+        if ($opcache_status !== false) {
+            $cache_url = wp_nonce_url(
+                admin_url('?wbe_clear_cache=1'),
+                'wbe_clear_cache',
+                'wbe_nonce'
+            );
+            
+            $plugin_meta[] = sprintf(
+                '<a href="%s" style="color: #d63638;">🗑️ Clear OPcache</a>',
+                esc_url($cache_url)
+            );
+        }
+    }
+    
+    return $plugin_meta;
+}, 10, 2);

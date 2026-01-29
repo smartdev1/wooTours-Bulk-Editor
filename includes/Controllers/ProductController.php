@@ -151,7 +151,7 @@ final class ProductController
         bool $only_wootour = false
     ): array {
         try {
-            // ✅ Pass the only_wootour parameter
+            //  Pass the only_wootour parameter
             $products = $this->product_repository->getProductsByCategory(
                 $category_id,
                 $page,
@@ -220,7 +220,7 @@ final class ProductController
         bool $only_wootour = false
     ): array {
         try {
-            // ✅ Pass the only_wootour parameter
+            //  Pass the only_wootour parameter
             $products = $this->product_repository->searchProducts(
                 $search_term,
                 $limit,

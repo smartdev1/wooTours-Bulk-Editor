@@ -90,13 +90,11 @@
          * @returns {boolean} True si validation OK
          */
         validateForm() {
-            // Valider la sélection des produits
             if (!window.WootourProductSelector || 
                 !window.WootourProductSelector.validate()) {
                 return false;
             }
 
-            // Valider les dates
             if (window.WootourBulkCalendar) {
                 const dates = window.WootourBulkCalendar.getSelectedDates();
                 const hasDates = dates.start_date || dates.end_date || 
@@ -129,10 +127,8 @@
             this.showProgress();
             this.updateProgress(0, 'Initialisation...');
             
-            // Désactiver le formulaire
             this.disableForm();
             
-            // Traiter le premier lot
             this.processBatch(selectedIds, formData);
         }
 
@@ -157,7 +153,6 @@
                 `Traitement du lot ${this.currentBatch}/${this.totalBatches}...`
             );
             
-            // Préparer les données AJAX
             const ajaxData = {
                 action: 'wootour_bulk_process_batch',
                 nonce: wootour_bulk_ajax.nonce,
@@ -166,14 +161,12 @@
                 batch_number: this.currentBatch,
                 total_batches: this.totalBatches
             };
-            
-            // Envoyer la requête AJAX
             this.xhr = $.ajax({
                 url: wootour_bulk_ajax.ajax_url,
                 type: 'POST',
                 dataType: 'json',
                 data: ajaxData,
-                timeout: 300000, // 5 minutes timeout
+                timeout: 300000, 
                 
                 beforeSend: () => {
                     this.updateButtonStates();
@@ -195,8 +188,8 @@
 
         /**
          * Gérer le succès d'un lot
-         * @param {Object} response - Réponse du serveur
-         * @param {number} batchSize - Taille du lot
+         * @param {Object} response
+         * @param {number} batchSize
          */
         handleBatchSuccess(response, batchSize) {
             if (response.success) {
@@ -208,7 +201,6 @@
                     this.logErrors(response.data.errors);
                 }
                 
-                // Mettre à jour la progression
                 const percent = Math.round((this.processedCount / this.totalCount) * 100);
                 this.updateProgress(
                     percent,
@@ -216,7 +208,6 @@
                     `${this.successCount} succès, ${this.errorCount} erreurs`
                 );
                 
-                // Afficher les résultats intermédiaires
                 if (this.currentBatch === this.totalBatches) {
                     this.finalizeProcessing();
                 } else {
@@ -225,7 +216,7 @@
                         const remainingIds = window.WootourProductSelector.getSelectedIds();
                         const formData = this.getFormData();
                         this.processBatch(remainingIds, formData);
-                    }, 500); // Petite pause entre les lots
+                    }, 500);
                 }
             } else {
                 this.handleBatchError(null, 'error', response.data?.message || 'Erreur inconnue', []);
@@ -254,7 +245,6 @@
                 product_ids: batchIds
             });
             
-            // Continuer avec le lot suivant si possible
             if (this.currentBatch < this.totalBatches && !this.isPaused) {
                 this.currentBatch++;
                 const remainingIds = window.WootourProductSelector.getSelectedIds();
@@ -274,19 +264,10 @@
         finalizeProcessing() {
             this.isProcessing = false;
             
-            // Mettre à jour la barre de progression
             this.updateProgress(100, 'Traitement terminé !');
-            
-            // Afficher les résultats finaux
             this.showResults();
-            
-            // Réactiver le formulaire
             this.enableForm();
-            
-            // Mettre à jour les boutons
             this.updateButtonStates();
-            
-            // Enregistrer dans l'historique
             this.logToHistory();
         }
 
@@ -332,7 +313,6 @@
             
             this.resultsContainer.html(resultsHtml).show();
             
-            // Ajouter les événements pour les résultats
             $('#close-results').on('click', () => {
                 this.resultsContainer.hide();
             });
@@ -410,13 +390,9 @@
          */
         getFormData() {
             const formData = {};
-            
-            // Récupérer les dates du calendrier
             if (window.WootourBulkCalendar) {
                 Object.assign(formData, window.WootourBulkCalendar.getSelectedDates());
             }
-            
-            // Récupérer les autres champs
             this.form.find('input, select, textarea').each(function() {
                 const name = $(this).attr('name');
                 if (name && !name.includes('[]')) {
@@ -434,8 +410,7 @@
             this.progressBar.css('width', percent + '%');
             this.progressBar.attr('aria-valuenow', percent);
             this.progressText.text(message);
-            
-            // Animation
+
             if (percent === 100) {
                 this.progressBar.addClass('progress-complete');
             } else {
@@ -599,8 +574,6 @@
                 errors: this.errorCount,
                 operation: this.getFormData()
             });
-            
-            // Garder seulement les 50 dernières entrées
             if (history.length > 50) {
                 history.pop();
             }
@@ -636,7 +609,6 @@
     $(document).ready(function() {
         window.wootourBatchProcessor = new BatchProcessor();
         
-        // Exposer l'API
         window.WootourBatchProcessor = {
             start: function() {
                 return window.wootourBatchProcessor.startProcessing();

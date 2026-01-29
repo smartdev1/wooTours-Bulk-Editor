@@ -412,7 +412,7 @@ final class BatchProcessor implements ServiceInterface
 
             error_log('[WBE BatchProcessor] Existing availability: ' . print_r($existing_availability->toArray(), true));
 
-            // 🔥 CORRECTION : Utiliser withProductId() au lieu de setProductId()
+            //  CORRECTION : Utiliser withProductId() au lieu de setProductId()
             // Votre classe Availability est immuable
             if (method_exists($existing_availability, 'withProductId')) {
                 $existing_availability = $existing_availability->withProductId($product_id);
@@ -430,7 +430,7 @@ final class BatchProcessor implements ServiceInterface
             // Merge changes
             $merged_availability = $this->availability_service->mergeChanges($existing_availability, $changes);
 
-            // 🔥 CORRECTION : S'assurer que l'ID du produit est défini
+            //  CORRECTION : S'assurer que l'ID du produit est défini
             if (method_exists($merged_availability, 'withProductId')) {
                 $merged_availability = $merged_availability->withProductId($product_id);
             }

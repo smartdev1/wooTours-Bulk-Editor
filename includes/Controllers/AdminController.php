@@ -111,13 +111,13 @@ class AdminController
             'date_format_js' => Constants::DATE_FORMATS['js'],
             'i18n' => $this->get_i18n_strings(),
 
-            // ✅ AJOUTER pour debug
+            //  AJOUTER pour debug
             'ajax_actions' => Constants::AJAX_ACTIONS,
 
-            // ✅ Utiliser la fonction corrigée SANS filtre Wootour pour le dropdown
+            //  Utiliser la fonction corrigée SANS filtre Wootour pour le dropdown
             'categories' => $this->product_repository->getCategoryTree(),
 
-            // ✅ Statistiques mises à jour
+            //  Statistiques mises à jour
             'statistics' => [
                 // Total de TOUS les produits
                 'total_products' => $this->product_repository->getProductCount(0, false),

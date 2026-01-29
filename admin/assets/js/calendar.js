@@ -45,20 +45,18 @@
             
             $('#bulk-start-date').datepicker({
                 dateFormat: self.dateFormat,
-                minDate: 0, // Pas de dates passées
+                minDate: 0, 
                 onSelect: function(dateText) {
                     self.selectedDates.startDate = dateText;
                     self.updateEndDateMinDate(dateText);
                     self.updateDateSummary();
                     
-                    // Si une date de fin existe et est antérieure, on la réinitialise
                     if (self.selectedDates.endDate && self.compareDates(dateText, self.selectedDates.endDate) > 0) {
                         self.selectedDates.endDate = null;
                         $('#bulk-end-date').val('');
                     }
                 },
                 beforeShow: function(input, inst) {
-                    // Style personnalisé
                     setTimeout(function() {
                         inst.dpDiv.addClass('wootour-bulk-calendar');
                     }, 0);
@@ -78,8 +76,6 @@
                 onSelect: function(dateText) {
                     self.selectedDates.endDate = dateText;
                     self.updateDateSummary();
-                    
-                    // Validation : date de fin doit être >= date de début
                     if (self.selectedDates.startDate && self.compareDates(self.selectedDates.startDate, dateText) > 0) {
                         alert('La date de fin doit être postérieure ou égale à la date de début.');
                         self.selectedDates.endDate = null;
@@ -108,7 +104,6 @@
                     const dateString = $.datepicker.formatDate(self.dateFormat, date);
                     const isSelected = self.selectedDates.excludeDates.includes(dateString);
                     
-                    // Style pour les dates sélectionnées
                     return [true, isSelected ? 'selected-date' : '', ''];
                 },
                 onSelect: function(dateText) {
@@ -116,11 +111,9 @@
                     self.toggleDateSelection(dateText, 'excludeDates');
                 },
                 onChangeMonthYear: function(year, month, inst) {
-                    // Rafraîchir le style quand on change de mois
                     setTimeout(function() {
                         $(inst.dpDiv).find('.ui-datepicker-calendar a').each(function() {
                             const dateText = $(this).text();
-                            // Logique de mise à jour des styles...
                         });
                     }, 10);
                 },
@@ -164,34 +157,28 @@
 
         /**
          * Basculer la sélection d'une date (ajouter/retirer)
-         * @param {string} dateText - Date au format 'yyyy-mm-dd'
-         * @param {string} dateType - Type de dates ('excludeDates' ou 'specificDates')
+         * @param {string} dateText
+         * @param {string} dateType
          */
         toggleDateSelection(dateText, dateType) {
             const index = this.selectedDates[dateType].indexOf(dateText);
             
             if (index === -1) {
-                // Ajouter la date
                 this.selectedDates[dateType].push(dateText);
             } else {
-                // Retirer la date
                 this.selectedDates[dateType].splice(index, 1);
             }
             
-            // Trier les dates
             this.selectedDates[dateType].sort();
             
-            // Mettre à jour le champ input avec les dates sélectionnées
             this.updateInputField(dateType);
             this.updateDateSummary();
-            
-            // Rafraîchir l'affichage du calendrier
             this.refreshCalendar(dateType);
         }
 
         /**
          * Mettre à jour le champ input avec les dates sélectionnées
-         * @param {string} dateType - Type de dates
+         * @param {string} dateType
          */
         updateInputField(dateType) {
             const inputId = dateType === 'excludeDates' ? '#bulk-exclude-dates' : '#bulk-specific-dates';
@@ -201,7 +188,7 @@
 
         /**
          * Rafraîchir l'affichage d'un calendrier
-         * @param {string} dateType - Type de calendrier
+         * @param {string} dateType 
          */
         refreshCalendar(dateType) {
             const inputId = dateType === 'excludeDates' ? '#bulk-exclude-dates' : '#bulk-specific-dates';
@@ -210,7 +197,7 @@
 
         /**
          * Mettre à jour la date minimum pour le calendrier de fin
-         * @param {string} startDate - Date de début
+         * @param {string} startDate
          */
         updateEndDateMinDate(startDate) {
             if (startDate) {
@@ -220,9 +207,9 @@
 
         /**
          * Comparer deux dates
-         * @param {string} date1 - Première date
-         * @param {string} date2 - Deuxième date
-         * @returns {number} -1 si date1 < date2, 0 si égales, 1 si date1 > date2
+         * @param {string} date1 
+         * @param {string} date2
+         * @returns {number} 
          */
         compareDates(date1, date2) {
             const d1 = new Date(date1);
@@ -266,8 +253,8 @@
 
         /**
          * Formater une date pour l'affichage
-         * @param {string} dateString - Date au format 'yyyy-mm-dd'
-         * @returns {string} Date formatée
+         * @param {string} dateString
+         * @returns {string}
          */
         formatDisplayDate(dateString) {
             const date = new Date(dateString);
@@ -290,15 +277,11 @@
                 specificDates: []
             };
             
-            // Réinitialiser les champs input
             this.calendarIds.forEach(id => {
                 $(id).val('');
             });
             
-            // Réinitialiser les options des calendriers
             $('#bulk-end-date').datepicker('option', 'minDate', 0);
-            
-            // Rafraîchir tous les calendriers
             this.calendarIds.forEach(id => {
                 if ($(id).hasClass('hasDatepicker')) {
                     $(id).datepicker('refresh');
@@ -310,7 +293,7 @@
 
         /**
          * Récupérer les dates sélectionnées pour soumission
-         * @returns {Object} Objet contenant toutes les dates
+         * @returns {Object}
          */
         getSelectedDates() {
             return {
@@ -318,14 +301,13 @@
                 end_date: this.selectedDates.endDate,
                 exclude_dates: this.selectedDates.excludeDates.join(','),
                 specific_dates: this.selectedDates.specificDates.join(','),
-                // Ajouter les jours de la semaine depuis le formulaire
                 week_days: this.getSelectedWeekDays()
             };
         }
 
         /**
          * Récupérer les jours de la semaine sélectionnés
-         * @returns {string} Jours sélectionnés séparés par des virgules
+         * @returns {string}
          */
         getSelectedWeekDays() {
             const selectedDays = [];
@@ -340,8 +322,6 @@
          */
         bindEvents() {
             const self = this;
-            
-            // Bouton pour effacer les dates
             $('#clear-dates').on('click', function(e) {
                 e.preventDefault();
                 if (confirm('Êtes-vous sûr de vouloir effacer toutes les sélections de dates ?')) {
@@ -349,14 +329,12 @@
                 }
             });
             
-            // Synchronisation entre calendriers de dates multiples
             $('.multi-date-input').on('focus', function() {
                 $(this).addClass('active-calendar');
             }).on('blur', function() {
                 $(this).removeClass('active-calendar');
             });
             
-            // Validation avant soumission
             $('#bulk-edit-form').on('submit', function(e) {
                 const dates = self.getSelectedDates();
                 const hasDates = dates.start_date || dates.end_date || dates.exclude_dates || 
@@ -368,7 +346,6 @@
                     return false;
                 }
                 
-                // Vérifier la cohérence des dates
                 if (dates.start_date && dates.end_date && self.compareDates(dates.start_date, dates.end_date) > 0) {
                     e.preventDefault();
                     alert('La date de début doit être antérieure ou égale à la date de fin.');
@@ -384,16 +361,12 @@
      * Initialisation quand le DOM est prêt
      */
     $(document).ready(function() {
-        // Vérifier si jQuery UI Datepicker est disponible
         if (!$.datepicker) {
             console.error('jQuery UI Datepicker n\'est pas disponible');
             return;
         }
         
-        // Initialiser le calendrier
         window.wootourBulkCalendar = new WootourBulkCalendar();
-        
-        // Exposer des méthodes globales si nécessaire
         window.WootourBulkCalendar = {
             getSelectedDates: function() {
                 return window.wootourBulkCalendar.getSelectedDates();

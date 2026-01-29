@@ -58,6 +58,7 @@ final class Plugin
         try {
             Constants::validate_environment();
             $this->autoloader->register();
+            $this->maybe_update();
             $this->register_lifecycle_hooks();
             $this->initialize_components();
             $this->register_wordpress_hooks();
@@ -65,7 +66,6 @@ final class Plugin
             $this->initialized = true;
 
             error_log('[WootourBulkEditor] Plugin initialized successfully');
-
         } catch (\Exception $e) {
             error_log('[WootourBulkEditor] Initialization failed: ' . $e->getMessage());
             throw new \RuntimeException('Plugin initialization failed', 0, $e);
@@ -134,16 +134,16 @@ final class Plugin
         $components = [
             // Services de base en premier
             \WootourBulkEditor\Services\LoggerService::class,
-            
+
             // Repositories
             \WootourBulkEditor\Repositories\WootourRepository::class,
             \WootourBulkEditor\Repositories\ProductRepository::class,
-            
+
             // Logique métier
             \WootourBulkEditor\Services\AvailabilityService::class,
             \WootourBulkEditor\Services\BatchProcessor::class,
             \WootourBulkEditor\Services\SecurityService::class,
-            
+
             // Contrôleurs (dépendent des services)
             \WootourBulkEditor\Controllers\AdminController::class,
             \WootourBulkEditor\Controllers\AjaxController::class,
@@ -158,14 +158,13 @@ final class Plugin
                     } else {
                         $component = new $component_class();
                     }
-                    
+
                     // Si le composant a une méthode init(), l'appeler
                     if (method_exists($component, 'init')) {
                         $component->init();
                     }
-                    
+
                     $this->components[$component_class] = $component;
-                    
                 } catch (\Exception $e) {
                     error_log(sprintf(
                         '[WootourBulkEditor] Failed to initialize component %s: %s',
@@ -190,7 +189,7 @@ final class Plugin
         // Hooks admin
         add_action('admin_menu', [$this, 'register_admin_menu']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
-        
+
         // Hooks AJAX
         foreach (Constants::AJAX_ACTIONS as $action) {
             add_action("wp_ajax_{$action}", [$this, 'handle_ajax_request']);
@@ -247,7 +246,7 @@ final class Plugin
             admin_url('admin.php?page=wootour-bulk-edit'),
             __('Bulk Edit', Constants::TEXT_DOMAIN)
         );
-        
+
         array_unshift($links, $settings_link);
         return $links;
     }
@@ -276,7 +275,7 @@ final class Plugin
     private function clear_transients(): void
     {
         global $wpdb;
-        
+
         $transients = $wpdb->get_col(
             $wpdb->prepare(
                 "SELECT option_name FROM {$wpdb->options} 
@@ -351,5 +350,22 @@ final class Plugin
                 'wootour'       => Constants::get_wootour_version() ?? 'Not active',
             ],
         ];
+    }
+
+    private function maybe_update(): void
+    {
+        $installed_version = get_option('wbe_version', '0.0.0');
+
+        if (version_compare($installed_version, Constants::VERSION, '<')) {
+            $this->run_updates($installed_version);
+            update_option('wbe_version', Constants::VERSION);
+        }
+    }
+
+    private function run_updates(string $from_version): void
+    {
+        if (version_compare($from_version, '2.0.0', '<')) {
+            // migrations 2.0.0
+        }
     }
 }

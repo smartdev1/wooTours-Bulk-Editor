@@ -8,7 +8,7 @@
  * 
  * @package     WootourBulkEditor
  * @subpackage  Repositories
- * @author      Votre Nom <email@example.com>
+ 
  * @license     GPL-2.0+
  * @since       1.0.0
  */
@@ -91,7 +91,7 @@ final class ProductRepository implements RepositoryInterface
             return $this->query_cache[$cache_key];
         }
 
-        // ✅ Build args with optional Wootour filter
+        //  Build args with optional Wootour filter
         $args = $this->buildBaseQueryArgs($only_wootour);
 
         // Add category filter if specified
@@ -184,7 +184,7 @@ final class ProductRepository implements RepositoryInterface
             return $this->query_cache[$cache_key];
         }
 
-        // ✅ Force Wootour filter to true
+        //  Force Wootour filter to true
         $args = $this->buildBaseQueryArgs(true);
         $args['posts_per_page'] = $limit;
 
@@ -218,7 +218,7 @@ final class ProductRepository implements RepositoryInterface
             return $this->query_cache[$cache_key];
         }
 
-        // ✅ Build args with optional Wootour filter
+        //  Build args with optional Wootour filter
         $args = $this->buildBaseQueryArgs($only_wootour);
 
         $args['s'] = sanitize_text_field($search_term);
@@ -506,7 +506,7 @@ final class ProductRepository implements RepositoryInterface
             'cache_results' => true,
         ];
 
-        // ✅ Add Wootour filter only if requested
+        //  Add Wootour filter only if requested
         if ($only_wootour) {
             $args['meta_query'] = $this->getWootourMetaQuery();
         }

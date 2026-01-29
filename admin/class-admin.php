@@ -5,8 +5,6 @@
  * Main admin class for handling WordPress admin integration.
  * 
  * @package     WootourBulkEditor
- * @subpackage  Admin
- * @author      Votre Nom <email@example.com>
  * @license     GPL-2.0+
  * @since       1.0.0
  */
@@ -38,7 +36,7 @@ final class Admin
      */
     private function __construct()
     {
-        // Constructor is private for Singleton
+        // Constructeur en privé pour le singleton
     }
 
     /**
@@ -46,19 +44,15 @@ final class Admin
      */
     public function init(): void
     {
-        // Register admin menu
+
         add_action('admin_menu', [$this, 'register_admin_menu']);
         
-        // Register admin scripts and styles
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
-        
-        // Add plugin action links
+
         add_filter('plugin_action_links_' . Constants::BASENAME, [$this, 'add_plugin_action_links']);
         
-        // Register admin notices
         add_action('admin_notices', [$this, 'display_admin_notices']);
         
-        // Register AJAX handlers for admin-specific actions
         add_action('wp_ajax_wbe_admin_test', [$this, 'handle_admin_test']);
         add_action('wp_ajax_wbe_admin_diagnostic', [$this, 'handle_admin_diagnostic']);
     }
@@ -68,12 +62,10 @@ final class Admin
      */
     public function register_admin_menu(): void
     {
-        // Check user capabilities
         if (!$this->user_can_access()) {
             return;
         }
 
-        // Add submenu page under WooCommerce
         $this->page_hook = add_submenu_page(
             'woocommerce',
             __('Wootour Bulk Editor', Constants::TEXT_DOMAIN),
@@ -84,7 +76,6 @@ final class Admin
             56
         );
 
-        // Add help tabs when the page loads
         add_action('load-' . $this->page_hook, [$this, 'add_help_tabs']);
     }
 
@@ -107,12 +98,10 @@ final class Admin
      */
     public function enqueue_admin_assets(string $hook_suffix): void
     {
-        // Only load on our plugin page
         if ($hook_suffix !== $this->page_hook) {
             return;
         }
 
-        // Enqueue WordPress jQuery UI Datepicker
         wp_enqueue_script('jquery-ui-datepicker');
         wp_enqueue_style('jquery-ui-style', 
             'https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css',
@@ -120,7 +109,6 @@ final class Admin
             '1.12.1'
         );
 
-        // Enqueue plugin CSS
         wp_enqueue_style(
             'wbe-admin',
             Constants::plugin_url() . 'admin/assets/css/admin.min.css',
@@ -128,7 +116,6 @@ final class Admin
             Constants::VERSION
         );
 
-        // Enqueue plugin JavaScript
         wp_enqueue_script(
             'wbe-admin',
             Constants::plugin_url() . 'admin/assets/js/admin.min.js',
@@ -137,7 +124,6 @@ final class Admin
             true
         );
 
-        // Localize script with PHP data
         $this->localize_admin_script();
     }
 
@@ -147,28 +133,24 @@ final class Admin
     private function localize_admin_script(): void
     {
         $localization_data = [
-            // URLs and nonces
             'ajax_url' => admin_url('admin-ajax.php'),
             'admin_url' => admin_url(),
             'plugin_url' => Constants::plugin_url(),
             'nonce' => wp_create_nonce('wbe_ajax_nonce'),
             'admin_nonce' => wp_create_nonce('wbe_admin_nonce'),
             
-            // Plugin settings
             'version' => Constants::VERSION,
             'batch_size' => Constants::BATCH_SIZE,
             'timeout_seconds' => Constants::TIMEOUT_SECONDS,
             'date_format' => Constants::DATE_FORMATS['display'],
             'date_format_js' => Constants::DATE_FORMATS['js'],
             
-            // User info
             'user_id' => get_current_user_id(),
             'user_can' => [
                 'manage_products' => current_user_can('edit_products'),
                 'manage_woocommerce' => current_user_can('manage_woocommerce'),
             ],
             
-            // System info
             'system' => [
                 'memory_limit' => ini_get('memory_limit'),
                 'max_execution_time' => ini_get('max_execution_time'),
@@ -185,12 +167,10 @@ final class Admin
      */
     public function render_admin_page(): void
     {
-        // Check permissions
         if (!$this->user_can_access()) {
             wp_die(__('You do not have sufficient permissions to access this page.', Constants::TEXT_DOMAIN));
         }
 
-        // Include the admin page template
         $template_path = Constants::plugin_dir() . 'admin/views/admin-page.php';
         
         if (file_exists($template_path)) {
@@ -216,7 +196,6 @@ final class Admin
             return;
         }
 
-        // Overview tab
         $screen->add_help_tab([
             'id'      => 'wbe-overview',
             'title'   => __('Overview', Constants::TEXT_DOMAIN),
@@ -228,7 +207,6 @@ final class Admin
             ',
         ]);
 
-        // How to use tab
         $screen->add_help_tab([
             'id'      => 'wbe-usage',
             'title'   => __('How to Use', Constants::TEXT_DOMAIN),
@@ -247,7 +225,6 @@ final class Admin
             ',
         ]);
 
-        // Help sidebar
         $screen->set_help_sidebar(
             '<p><strong>' . __('For more information:', Constants::TEXT_DOMAIN) . '</strong></p>' .
             '<p><a href="https://wordpress.org/support/" target="_blank">' . __('WordPress Support', Constants::TEXT_DOMAIN) . '</a></p>' .
@@ -282,14 +259,12 @@ final class Admin
     {
         $screen = get_current_screen();
         
-        // Only show on our plugin page or plugins page
         $show_on_pages = ['plugins', $this->page_hook];
         
         if (!$screen || !in_array($screen->id, $show_on_pages, true)) {
             return;
         }
 
-        // Check for Wootour plugin
         if (!defined('WOOTOUR_VERSION')) {
             $this->render_notice(
                 'warning',
@@ -297,7 +272,6 @@ final class Admin
             );
         }
 
-        // Check WooCommerce
         if (!class_exists('WooCommerce')) {
             $this->render_notice(
                 'error',
@@ -305,7 +279,6 @@ final class Admin
             );
         }
 
-        // Check PHP version
         if (version_compare(PHP_VERSION, '7.4', '<')) {
             $this->render_notice(
                 'warning',
@@ -334,12 +307,10 @@ final class Admin
      */
     public function handle_admin_test(): void
     {
-        // Verify nonce
         if (!check_ajax_referer('wbe_admin_nonce', 'nonce', false)) {
             wp_send_json_error(['message' => 'Security check failed']);
         }
 
-        // Check capabilities
         if (!$this->user_can_access()) {
             wp_send_json_error(['message' => 'Permission denied']);
         }
@@ -363,12 +334,10 @@ final class Admin
      */
     public function handle_admin_diagnostic(): void
     {
-        // Verify nonce
         if (!check_ajax_referer('wbe_admin_nonce', 'nonce', false)) {
             wp_send_json_error(['message' => 'Security check failed']);
         }
 
-        // Check capabilities
         if (!$this->user_can_access()) {
             wp_send_json_error(['message' => 'Permission denied']);
         }
@@ -447,10 +416,8 @@ final class Admin
      */
     public function cleanup(): void
     {
-        // Remove admin menu
         remove_submenu_page('woocommerce', 'wootour-bulk-edit');
         
-        // Clear any admin transients
         $transients = [
             'wbe_admin_notice',
             'wbe_admin_cache',

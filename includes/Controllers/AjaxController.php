@@ -1,14 +1,18 @@
 <?php
 
 /**
- * Wootour Bulk Editor - AJAX Controller
+ * Wootour Bulk Editor - AJAX Controller (Validation Simplifiée)
  * 
  * Handles all AJAX requests from the admin interface
  * with security validation and standardized responses.
  * 
+ * MODIFICATION MAJEURE :
+ * - Toutes les règles de disponibilité sont maintenant optionnelles
+ * - On peut ne définir aucune règle (conservation des données existantes)
+ * - Validation de cohérence maintenue (dates, conflits)
+ * 
  * @package     WootourBulkEditor
  * @subpackage  Controllers
- * @author      Votre Nom <email@example.com>
  * @license     GPL-2.0+
  * @since       1.0.0
  */
@@ -149,6 +153,9 @@ final class AjaxController
             case Constants::AJAX_ACTIONS['validate_dates']:
                 return $this->handle_validate_dates();
 
+            case 'wbe_get_product_availability':
+                return $this->handle_get_product_availability();
+
             case 'get_progress':
                 return $this->handle_get_progress();
 
@@ -178,7 +185,9 @@ final class AjaxController
         );
     }
 
-    // Dans validate_ajax_request() de la NOUVELLE version :
+    /**
+     * Validate AJAX request
+     */
     private function validate_ajax_request(): void
     {
         // Check if user is logged in
@@ -194,11 +203,6 @@ final class AjaxController
         if (!$this->security_service->verify_nonce($nonce, 'ajax')) {
             throw new \RuntimeException('Security check failed. Please refresh the page.', 403);
         }
-
-        // Commenter temporairement la vérification du referer
-        // if (!$this->security_service->check_referer()) {
-        //     throw new \RuntimeException('Invalid request origin.', 403);
-        // }
 
         // Check if it's an AJAX request
         if (!defined('DOING_AJAX') || !DOING_AJAX) {
@@ -231,21 +235,20 @@ final class AjaxController
             // Recherche SIMPLE : uniquement dans le titre (post_title)
             $args = [
                 'post_type'      => ['product', 'product_variation'],
-                'post_status'    => 'publish', // Uniquement les produits publiés
-                's'              => $search_term, // WordPress cherche par défaut dans le titre
+                'post_status'    => 'publish',
+                's'              => $search_term,
                 'posts_per_page' => $limit,
                 'orderby'        => 'title',
                 'order'          => 'ASC',
                 'fields'         => 'ids',
-                'sentence'       => true, // Recherche exacte de phrase
+                'sentence'       => true,
             ];
 
-            // Forcer la recherche uniquement dans le titre (pas dans le contenu)
+            // Forcer la recherche uniquement dans le titre
             add_filter('posts_search', function ($search, $wp_query) use ($search_term) {
                 global $wpdb;
 
                 if ($wp_query->is_search() && !empty($search_term)) {
-                    // Recherche uniquement dans post_title
                     $search = $wpdb->prepare(
                         " AND {$wpdb->posts}.post_title LIKE %s",
                         '%' . $wpdb->esc_like($search_term) . '%'
@@ -432,7 +435,6 @@ final class AjaxController
     {
         error_log('[WBE] Processing batch request');
         error_log('[WBE] POST data: ' . print_r($_POST, true));
-        error_log('[WBE] REQUEST data: ' . print_r($_REQUEST, true));
 
         // Parse request data
         $product_ids = $this->parse_product_ids();
@@ -442,14 +444,13 @@ final class AjaxController
         error_log('[WBE] Parsed product IDs: ' . print_r($product_ids, true));
         error_log('[WBE] Parsed changes: ' . print_r($changes, true));
 
-        // Validate we have something to process
+        // Validate we have products to process
         if (empty($product_ids)) {
             throw new ValidationException('No products selected.');
         }
 
-        if (empty($changes)) {
-            throw new ValidationException('No changes specified.');
-        }
+        // NOTE IMPORTANTE : On n'exige plus qu'il y ait des changements
+        // Si aucune règle n'est définie, les données existantes sont conservées
 
         error_log('[WBE] Starting batch processing for ' . count($product_ids) . ' products');
 
@@ -470,6 +471,7 @@ final class AjaxController
 
     /**
      * Handle: Validate dates before moving to step 3
+     * VERSION SIMPLIFIÉE : Toutes les règles sont optionnelles
      */
     private function handle_validate_dates(): array
     {
@@ -519,45 +521,50 @@ final class AjaxController
     }
 
     /**
-     * Validation spécifique pour l'étape 2
+     * Validation spécifique pour l'étape 2 - VERSION SIMPLIFIÉE
+     * 
+     * MODIFICATIONS MAJEURES :
+     * - On ne vérifie PLUS qu'au moins une règle est définie
+     * - Toutes les règles sont optionnelles
+     * - On vérifie seulement la cohérence des données fournies
      */
     private function validate_for_step2(array $changes): array
     {
         $errors = [];
 
-        // 1. Vérifier qu'au moins une règle est définie
-        $hasDates = !empty($changes['start_date']) && !empty($changes['end_date']);
-        $hasWeekdays = !empty($changes['weekdays']);
-        $hasSpecific = !empty($changes['specific']);
+        // 1. Si une plage de dates est définie, la valider
+        $hasStartDate = !empty($changes['start_date']);
+        $hasEndDate = !empty($changes['end_date']);
 
-        if (!$hasDates && !$hasWeekdays && !$hasSpecific) {
-            $errors[] = 'Veuillez définir au moins une règle de disponibilité (période, jours de la semaine, ou dates spécifiques).';
-        }
-
-        // 2. Si une plage de dates est définie, la valider
-        if (isset($changes['start_date']) && isset($changes['end_date'])) {
-            if (empty($changes['start_date'])) {
-                $errors[] = 'La date de début est requise si vous définissez une période.';
-            }
-            if (empty($changes['end_date'])) {
-                $errors[] = 'La date de fin est requise si vous définissez une période.';
-            }
-
-            // Valider la plage si les deux dates sont présentes
-            if (!empty($changes['start_date']) && !empty($changes['end_date'])) {
-                try {
-                    $this->validate_date_range($changes['start_date'], $changes['end_date']);
-                } catch (ValidationException $e) {
-                    $errors[] = $e->getMessage();
-                }
+        // Si une seule date est fournie, c'est une erreur
+        if ($hasStartDate !== $hasEndDate) {
+            if ($hasStartDate && !$hasEndDate) {
+                $errors[] = 'La date de fin est requise si vous définissez une date de début.';
+            } elseif (!$hasStartDate && $hasEndDate) {
+                $errors[] = 'La date de début est requise si vous définissez une date de fin.';
             }
         }
 
-        // 3. Vérifier les conflits de dates
+        // Si les deux dates sont présentes, valider la plage
+        if ($hasStartDate && $hasEndDate) {
+            try {
+                $this->validate_date_range($changes['start_date'], $changes['end_date']);
+            } catch (ValidationException $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+
+        // 2. Vérifier les conflits de dates
         if (!empty($changes['specific']) && !empty($changes['exclusions'])) {
             $conflicts = array_intersect($changes['specific'], $changes['exclusions']);
             if (!empty($conflicts)) {
-                $errors[] = 'Certaines dates sont à la fois marquées comme disponibles et exclues. Veuillez corriger cette incohérence.';
+                $formattedConflicts = array_map(function($date) {
+                    return date('d/m/Y', strtotime($date));
+                }, $conflicts);
+                $errors[] = sprintf(
+                    'Les dates suivantes sont à la fois marquées comme disponibles et exclues : %s',
+                    implode(', ', $formattedConflicts)
+                );
             }
         }
 
@@ -570,6 +577,18 @@ final class AjaxController
     private function generate_step2_summary(array $changes): array
     {
         $summary = [];
+
+        // Vérifier si au moins une règle est définie
+        $hasRules = (!empty($changes['start_date']) && !empty($changes['end_date'])) ||
+                    !empty($changes['weekdays']) ||
+                    !empty($changes['specific']) ||
+                    !empty($changes['exclusions']);
+
+        if (!$hasRules) {
+            $summary['no_rules'] = true;
+            $summary['message'] = 'Aucune règle de disponibilité définie. Les informations existantes des produits seront conservées.';
+            return $summary;
+        }
 
         // Plage de dates
         if (!empty($changes['start_date']) && !empty($changes['end_date'])) {
@@ -629,79 +648,6 @@ final class AjaxController
     }
 
     /**
-     * Check if dates are within the specified range
-     */
-    private function check_dates_in_range(array $dates, string $start_date, string $end_date): array
-    {
-        $conflicts = [];
-        $start_timestamp = strtotime($start_date);
-        $end_timestamp = strtotime($end_date);
-
-        foreach ($dates as $date) {
-            $date_timestamp = strtotime($date);
-
-            if ($date_timestamp < $start_timestamp || $date_timestamp > $end_timestamp) {
-                $conflicts[] = [
-                    'type' => 'warning',
-                    'message' => sprintf(
-                        'La date %s est en dehors de la plage définie (%s - %s).',
-                        date('d/m/Y', $date_timestamp),
-                        date('d/m/Y', $start_timestamp),
-                        date('d/m/Y', $end_timestamp)
-                    ),
-                    'date' => $date,
-                    'field' => 'range',
-                ];
-            }
-        }
-
-        return $conflicts;
-    }
-
-    /**
-     * Generate a summary of validation results
-     */
-    private function generate_validation_summary(array $changes, array $conflicts): array
-    {
-        $error_count = count(array_filter($conflicts, fn($c) => $c['type'] === 'error'));
-        $warning_count = count(array_filter($conflicts, fn($c) => $c['type'] === 'warning'));
-
-        $summary = [
-            'dates_configured' => false,
-            'has_errors' => $error_count > 0,
-            'has_warnings' => $warning_count > 0,
-            'error_count' => $error_count,
-            'warning_count' => $warning_count,
-        ];
-
-        // Vérifier ce qui est configuré
-        if (isset($changes['start_date']) && isset($changes['end_date'])) {
-            $summary['date_range'] = sprintf(
-                '%s - %s',
-                date('d/m/Y', strtotime($changes['start_date'])),
-                date('d/m/Y', strtotime($changes['end_date']))
-            );
-            $summary['dates_configured'] = true;
-        }
-
-        if (!empty($changes['weekdays'])) {
-            $weekday_names = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-            $selected_days = array_map(fn($idx) => $weekday_names[$idx], $changes['weekdays']);
-            $summary['weekdays'] = implode(', ', $selected_days);
-        }
-
-        if (!empty($changes['specific'])) {
-            $summary['specific_dates_count'] = count($changes['specific']);
-        }
-
-        if (!empty($changes['exclusions'])) {
-            $summary['exclusions_count'] = count($changes['exclusions']);
-        }
-
-        return $summary;
-    }
-
-    /**
      * Handle: Get operation progress
      */
     private function handle_get_progress(): array
@@ -732,6 +678,155 @@ final class AjaxController
     }
 
     /**
+     * Handle: Get product availability data
+     * Récupère les données de disponibilité existantes d'un produit
+     */
+    private function handle_get_product_availability(): array
+    {
+        $product_id = (int) ($_REQUEST['product_id'] ?? 0);
+
+        if (empty($product_id)) {
+            throw new ValidationException('Product ID required.');
+        }
+
+        // Vérifier que le produit existe
+        $product = wc_get_product($product_id);
+        if (!$product) {
+            throw new ValidationException('Product not found.');
+        }
+
+        // Récupérer la clé meta WooTour
+        $meta_key = Constants::get_verified_meta_key();
+        if (!$meta_key) {
+            return [
+                'success' => true,
+                'data' => [
+                    'product_id' => $product_id,
+                    'has_data' => false,
+                    'message' => 'WooTour plugin not active or meta key not found.'
+                ]
+            ];
+        }
+
+        // Récupérer les données de disponibilité
+        $availability_data = get_post_meta($product_id, $meta_key, true);
+
+        if (empty($availability_data)) {
+            return [
+                'success' => true,
+                'data' => [
+                    'product_id' => $product_id,
+                    'has_data' => false,
+                    'message' => 'No availability data found for this product.'
+                ]
+            ];
+        }
+
+        // Parser les données selon le format WooTour
+        $parsed_data = $this->parse_wootour_availability($availability_data);
+
+        return [
+            'success' => true,
+            'data' => array_merge([
+                'product_id' => $product_id,
+                'has_data' => true,
+                'product_name' => $product->get_name(),
+            ], $parsed_data)
+        ];
+    }
+
+    /**
+     * Parser les données de disponibilité WooTour
+     * 
+     * @param mixed $availability_data Données brutes de disponibilité
+     * @return array Données parsées et formatées
+     */
+    private function parse_wootour_availability($availability_data): array
+    {
+        $result = [
+            'start_date' => '',
+            'end_date' => '',
+            'weekdays' => [],
+            'specific' => [],
+            'exclusions' => []
+        ];
+
+        // Si c'est déjà un tableau, traiter directement
+        if (is_array($availability_data)) {
+            // Date de début
+            if (!empty($availability_data['start_date'])) {
+                $result['start_date'] = $this->normalize_date($availability_data['start_date']);
+            }
+
+            // Date de fin
+            if (!empty($availability_data['end_date'])) {
+                $result['end_date'] = $this->normalize_date($availability_data['end_date']);
+            }
+
+            // Jours de la semaine
+            if (!empty($availability_data['weekdays']) && is_array($availability_data['weekdays'])) {
+                $result['weekdays'] = array_map('intval', $availability_data['weekdays']);
+            }
+
+            // Dates spécifiques
+            if (!empty($availability_data['specific']) && is_array($availability_data['specific'])) {
+                $result['specific'] = array_map([$this, 'normalize_date'], $availability_data['specific']);
+            }
+
+            // Exclusions
+            if (!empty($availability_data['exclusions']) && is_array($availability_data['exclusions'])) {
+                $result['exclusions'] = array_map([$this, 'normalize_date'], $availability_data['exclusions']);
+            }
+        }
+        // Si c'est une chaîne sérialisée, la désérialiser d'abord
+        elseif (is_string($availability_data)) {
+            $unserialized = @unserialize($availability_data);
+            if (is_array($unserialized)) {
+                return $this->parse_wootour_availability($unserialized);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Normaliser une date au format YYYY-MM-DD
+     * 
+     * @param string $date Date à normaliser
+     * @return string Date normalisée
+     */
+    private function normalize_date(string $date): string
+    {
+        if (empty($date)) {
+            return '';
+        }
+
+        // Si déjà au bon format
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return $date;
+        }
+
+        // Si format DD/MM/YYYY
+        if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $date, $matches)) {
+            return sprintf('%04d-%02d-%02d', $matches[3], $matches[2], $matches[1]);
+        }
+
+        // Si format MM/DD/YYYY
+        if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $date, $matches)) {
+            // Ambiguïté - on suppose DD/MM/YYYY par défaut
+            return sprintf('%04d-%02d-%02d', $matches[3], $matches[2], $matches[1]);
+        }
+
+        // Essayer strtotime comme dernier recours
+        $timestamp = strtotime($date);
+        if ($timestamp !== false) {
+            return date('Y-m-d', $timestamp);
+        }
+
+        return '';
+    }
+
+    /**
      * Handle: Preview changes before applying
      */
     private function handle_preview_changes(): array
@@ -742,10 +837,6 @@ final class AjaxController
 
         if (empty($product_ids)) {
             throw new ValidationException('No products selected for preview.');
-        }
-
-        if (empty($changes)) {
-            throw new ValidationException('No changes specified for preview.');
         }
 
         $preview = $this->batch_processor->previewChanges($product_ids, $changes, $sample_size);
@@ -879,28 +970,28 @@ final class AjaxController
                         $changes[$field] = array_map('sanitize_text_field', $value);
                     }
                 } elseif (is_string($value)) {
-                    // 🔥 CORRECTION CRITIQUE : Convertir les dates du format DD/MM/YYYY en YYYY-MM-DD
+                    // Convert date formats
                     if ($field === 'start_date' || $field === 'end_date') {
                         error_log('[WBE AjaxController] Raw date value for ' . $field . ': ' . $value);
 
-                        // Vérifier si c'est déjà au format YYYY-MM-DD
+                        // Check if already YYYY-MM-DD
                         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
                             $changes[$field] = sanitize_text_field($value);
                             error_log('[WBE AjaxController] Date already YYYY-MM-DD: ' . $value);
                         }
-                        // Vérifier si c'est au format DD/MM/YYYY
+                        // Check if DD/MM/YYYY format
                         elseif (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $value, $matches)) {
-                            // Convertir DD/MM/YYYY en YYYY-MM-DD
+                            // Convert DD/MM/YYYY to YYYY-MM-DD
                             $converted_date = sprintf(
                                 '%04d-%02d-%02d',
-                                $matches[3], // année
-                                $matches[2], // mois  
-                                $matches[1]  // jour
+                                $matches[3], // year
+                                $matches[2], // month  
+                                $matches[1]  // day
                             );
                             $changes[$field] = sanitize_text_field($converted_date);
                             error_log('[WBE AjaxController] Converted date ' . $field . ': ' . $value . ' → ' . $converted_date);
                         } else {
-                            // Format inconnu, laisser tel quel (sera rejeté par la validation)
+                            // Unknown format, leave as is (will be rejected by validation)
                             $changes[$field] = sanitize_text_field($value);
                             error_log('[WBE AjaxController] Unknown date format: ' . $value);
                         }
@@ -915,7 +1006,7 @@ final class AjaxController
             }
         }
 
-        // Traiter les dates spécifiques et exclusions (qui peuvent venir comme chaînes)
+        // Process specific and exclusion dates (which may come as strings)
         foreach (['specific', 'exclusions'] as $date_field) {
             if (isset($changes[$date_field]) && is_string($changes[$date_field])) {
                 $dates = explode(',', $changes[$date_field]);
@@ -925,7 +1016,7 @@ final class AjaxController
                     $date = trim($date);
                     if (empty($date)) continue;
 
-                    // Convertir DD/MM/YYYY en YYYY-MM-DD si nécessaire
+                    // Convert DD/MM/YYYY to YYYY-MM-DD if necessary
                     if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $date, $matches)) {
                         $converted_date = sprintf('%04d-%02d-%02d', $matches[3], $matches[2], $matches[1]);
                         $converted_dates[] = $converted_date;
@@ -940,12 +1031,13 @@ final class AjaxController
 
         error_log('[WBE AjaxController] Final parsed changes: ' . print_r($changes, true));
 
-        // 🔥 VALIDATION DES DATES
-        if (isset($changes['start_date']) && isset($changes['end_date'])) {
+        // VALIDATION DES DATES (only if both are provided)
+        if (isset($changes['start_date']) && isset($changes['end_date']) && 
+            !empty($changes['start_date']) && !empty($changes['end_date'])) {
             $this->validate_date_range($changes['start_date'], $changes['end_date']);
         }
 
-        // 🔥 VALIDATION DES CONFLITS (dates spécifiques vs exclusions)
+        // VALIDATION DES CONFLITS (specific vs exclusion dates)
         if (!empty($changes['specific']) && !empty($changes['exclusions'])) {
             $specific_dates = $changes['specific'];
             $exclusion_dates = $changes['exclusions'];
@@ -970,53 +1062,13 @@ final class AjaxController
         return $changes;
     }
 
-
-    /**
-     * Validate that specific/exclusion dates are within date range
-     */
-    private function validate_dates_in_range(array $dates, string $start_date, string $end_date): void
-    {
-        $start_timestamp = strtotime($start_date);
-        $end_timestamp = strtotime($end_date);
-
-        foreach ($dates as $date) {
-            $date_timestamp = strtotime($date);
-
-            if ($date_timestamp === false) {
-                throw new ValidationException(
-                    sprintf('Date invalide dans la liste : %s', $date)
-                );
-            }
-
-            if ($date_timestamp < $start_timestamp) {
-                throw new ValidationException(
-                    sprintf(
-                        'La date %s est antérieure à la date de début (%s).',
-                        date('d/m/Y', $date_timestamp),
-                        date('d/m/Y', $start_timestamp)
-                    )
-                );
-            }
-
-            if ($date_timestamp > $end_timestamp) {
-                throw new ValidationException(
-                    sprintf(
-                        'La date %s est postérieure à la date de fin (%s).',
-                        date('d/m/Y', $date_timestamp),
-                        date('d/m/Y', $end_timestamp)
-                    )
-                );
-            }
-        }
-    }
-
     /**
      * Validate date range
      * @throws ValidationException
      */
     private function validate_date_range(string $start_date, string $end_date): void
     {
-        // Vérifier que les dates sont au bon format
+        // Check date format
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start_date)) {
             throw new ValidationException(
                 sprintf('Format de date de début invalide : %s. Utilisez JJ/MM/AAAA.', $start_date)
@@ -1029,7 +1081,7 @@ final class AjaxController
             );
         }
 
-        // Convertir en timestamps pour comparaison
+        // Convert to timestamps for comparison
         $start_timestamp = strtotime($start_date);
         $end_timestamp = strtotime($end_date);
 
@@ -1041,7 +1093,7 @@ final class AjaxController
             throw new ValidationException('Date de fin invalide.');
         }
 
-        // 🔥 Validation principale : date de fin ne doit pas être antérieure à date de début
+        // Main validation: end date cannot be before start date
         if ($end_timestamp < $start_timestamp) {
             throw new ValidationException(
                 sprintf(
@@ -1052,7 +1104,7 @@ final class AjaxController
             );
         }
 
-        // Optionnel : vérifier que la date de début n'est pas dans le passé
+        // Optional: check that start date is not in the past
         $today_timestamp = strtotime(date('Y-m-d'));
         if ($start_timestamp < $today_timestamp) {
             throw new ValidationException(
@@ -1060,8 +1112,8 @@ final class AjaxController
             );
         }
 
-        // Optionnel : limiter la plage à une durée raisonnable (ex: 2 ans)
-        $max_days = 730; // 2 ans
+        // Optional: limit range to reasonable duration (e.g., 2 years)
+        $max_days = 730; // 2 years
         $days_diff = ($end_timestamp - $start_timestamp) / (60 * 60 * 24);
         if ($days_diff > $max_days) {
             throw new ValidationException(
