@@ -184,22 +184,51 @@ final class WootourRepository implements RepositoryInterface
 
         try {
             // 1. Mettre à jour les métadonnées WooTours (timestamps)
-            $this->updateWootourTimestampMeta($product_id, $availability_data);
+            $meta_updated = $this->updateWootourTimestampMeta($product_id, $availability_data);
+
+            if (!$meta_updated) {
+                error_log('[WBE WootourRepository] ERROR: Failed to update timestamp meta');
+                return false;
+            }
 
             // 2. Mettre à jour _wootour_availability (double sérialisé)
             $meta_key = '_wootour_availability';
             $wootour_data = $this->formatForWootour($availability_data, $product_id);
 
-            $result = update_post_meta($product_id, $meta_key, $wootour_data);
+            // CORRECTION : update_post_meta() retourne false si la valeur n'a pas changé
+            // Ce n'est pas une erreur, donc on vérifie d'abord si la sauvegarde est nécessaire
+            $existing_data = get_post_meta($product_id, $meta_key, true);
+
+            // Si les données existent déjà et sont identiques, considérer comme un succès
+            if ($existing_data === $wootour_data) {
+                error_log('[WBE WootourRepository] Data unchanged, considering as success');
+                $result = true;
+            } else {
+                $result = update_post_meta($product_id, $meta_key, $wootour_data);
+
+                // update_post_meta() peut retourner false même en cas de succès si la valeur était vide
+                if ($result === false) {
+                    // Vérifier si la valeur a été sauvegardée
+                    $new_data = get_post_meta($product_id, $meta_key, true);
+                    $result = ($new_data === $wootour_data);
+
+                    if ($result) {
+                        error_log('[WBE WootourRepository] Data saved despite false return');
+                    } else {
+                        error_log('[WBE WootourRepository] ERROR: Failed to save _wootour_availability');
+                        return false;
+                    }
+                }
+            }
 
             // 3. Vider les caches
             $this->clearAllCaches($product_id);
 
-            error_log('[WBE WootourRepository] === END updateAvailability ===');
+            error_log('[WBE WootourRepository] === END updateAvailability (SUCCESS) ===');
 
-            return $result !== false;
+            return true; // Toujours retourner true si on arrive ici
         } catch (\Exception $e) {
-            error_log('[WBE WootourRepository] ERROR: ' . $e->getMessage());
+            error_log('[WBE WootourRepository] EXCEPTION: ' . $e->getMessage());
             return false;
         }
     }
@@ -245,7 +274,7 @@ final class WootourRepository implements RepositoryInterface
      * 
      * ⚠️ MODIFICATION MAJEURE : Un seul timestamp par meta key, pas de tableaux
      */
-    private function updateWootourTimestampMeta(int $product_id, array $availability_data): void
+    private function updateWootourTimestampMeta(int $product_id, array $availability_data): bool
     {
         error_log('');
         error_log('████████████████████████████████████████');
@@ -340,7 +369,7 @@ final class WootourRepository implements RepositoryInterface
             error_log('📝 TRAITEMENT DES EXCLUSIONS...');
 
             // Prendre UNIQUEMENT la première date d'exclusion
-            $first_exclusion = $availability_data['exclusions'][0];
+            $first_exclusion = end($availability_data['exclusions']);
             error_log('  Première exclusion: ' . $first_exclusion);
 
             $timestamp = strtotime($first_exclusion);
@@ -350,6 +379,7 @@ final class WootourRepository implements RepositoryInterface
                 // wt_disabledate - UN SEUL timestamp
                 error_log('');
                 error_log('  ▶️  Mise à jour wt_disabledate...');
+
                 $result = update_post_meta($product_id, 'wt_disabledate', $timestamp);
                 error_log('    Résultat: ' . ($result ? '✅ SUCCESS' : '⚠️  FAILED/UNCHANGED'));
                 error_log('    Valeur: ' . $timestamp . ' (' . $first_exclusion . ')');
@@ -410,7 +440,7 @@ final class WootourRepository implements RepositoryInterface
             error_log('📝 TRAITEMENT DES DATES SPÉCIFIQUES...');
 
             // Prendre UNIQUEMENT la première date spécifique
-            $first_specific = $availability_data['specific'][0];
+            $first_specific = end($availability_data['specific']);
             error_log('  Première date spécifique: ' . $first_specific);
 
             $timestamp = strtotime($first_specific);
@@ -459,6 +489,8 @@ final class WootourRepository implements RepositoryInterface
         error_log('🔵 updateWootourTimestampMeta() FIN');
         error_log('████████████████████████████████████████');
         error_log('');
+        
+         return true;
     }
 
     /**

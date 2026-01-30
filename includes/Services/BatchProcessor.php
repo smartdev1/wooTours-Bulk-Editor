@@ -317,7 +317,7 @@ final class BatchProcessor implements ServiceInterface
             $state['errors'] = array_merge($state['errors'], $chunk_result['errors']);
             $state['warnings'] = array_merge($state['warnings'], $chunk_result['warnings']);
 
-            // Recalculate remaining
+            // Recalculate remaining (CRITIQUE : après avoir traité le chunk)
             $state['remaining_ids'] = array_diff(
                 $state['all_product_ids'],
                 $state['processed_ids'],
@@ -335,6 +335,18 @@ final class BatchProcessor implements ServiceInterface
             // If we have warnings or errors, add small delay to prevent server overload
             if (!empty($chunk_result['errors']) || !empty($chunk_result['warnings'])) {
                 usleep(100000); // 0.1 second delay
+            }
+
+            // Return intermediate result if not complete
+            if (!empty($state['remaining_ids'])) {
+                return [
+                    'is_complete' => false,
+                    'processed_in_chunk' => count($chunk_result['processed_ids']),
+                    'total_processed' => $state['processed_count'],
+                    'total_remaining' => count($state['remaining_ids']),
+                    'batch_number' => $state['current_batch'],
+                    'progress' => $this->calculateProgress($state),
+                ];
             }
         }
 
@@ -402,6 +414,13 @@ final class BatchProcessor implements ServiceInterface
         error_log('[WBE BatchProcessor] Processing product #' . $product_id . ': ' . $product->getName());
 
         try {
+            // Vérifier si le produit a déjà été traité récemment
+            $cache_key = 'wbe_recently_processed_' . $product_id;
+            if (get_transient($cache_key)) {
+                error_log('[WBE BatchProcessor] Product #' . $product_id . ' skipped - recently processed');
+                return;
+            }
+
             // Check if product still exists and is valid
             if (!$this->product_repository->isValidProduct($product_id)) {
                 throw new \Exception('Product no longer exists or is invalid');
@@ -412,8 +431,7 @@ final class BatchProcessor implements ServiceInterface
 
             error_log('[WBE BatchProcessor] Existing availability: ' . print_r($existing_availability->toArray(), true));
 
-            //  CORRECTION : Utiliser withProductId() au lieu de setProductId()
-            // Votre classe Availability est immuable
+            // Définir l'ID du produit sur l'objet availability
             if (method_exists($existing_availability, 'withProductId')) {
                 $existing_availability = $existing_availability->withProductId($product_id);
             }
@@ -421,6 +439,8 @@ final class BatchProcessor implements ServiceInterface
             // Check if changes will actually modify anything
             if (!$this->availability_service->hasEffectiveChanges($existing_availability, $changes)) {
                 error_log('[WBE BatchProcessor] Product #' . $product_id . ' skipped - no effective changes');
+                // Marquer comme traité quand même
+                set_transient($cache_key, true, 60); // 60 secondes
                 return;
             }
 
@@ -430,7 +450,7 @@ final class BatchProcessor implements ServiceInterface
             // Merge changes
             $merged_availability = $this->availability_service->mergeChanges($existing_availability, $changes);
 
-            //  CORRECTION : S'assurer que l'ID du produit est défini
+            // S'assurer que l'ID du produit est défini
             if (method_exists($merged_availability, 'withProductId')) {
                 $merged_availability = $merged_availability->withProductId($product_id);
             }
@@ -443,6 +463,9 @@ final class BatchProcessor implements ServiceInterface
             if (!$save_result) {
                 throw new \Exception('Failed to save availability data');
             }
+
+            // Marquer comme traité pour éviter les doublons
+            set_transient($cache_key, true, 300); // 5 minutes
 
             error_log('[WBE BatchProcessor] Product #' . $product_id . ' successfully updated');
 
@@ -463,6 +486,52 @@ final class BatchProcessor implements ServiceInterface
             $this->logger_service->logProductFailed($product_id, $changes, $e->getMessage());
             throw $e; // Re-throw for chunk processing
         }
+    }
+
+    public function processSingleChunk(array $state): array
+    {
+        $chunk_size = Constants::BATCH_SIZE;
+
+        if (empty($state['remaining_ids'])) {
+            return [
+                'is_complete' => true,
+                'message' => 'All products processed',
+                'updated_state' => $state
+            ];
+        }
+
+        // Prendre un chunk
+        $chunk_ids = array_slice($state['remaining_ids'], 0, $chunk_size);
+
+        // Traiter le chunk
+        $chunk_result = $this->processChunk($chunk_ids, $state['changes']);
+
+        // Mettre à jour l'état
+        $state['current_batch']++;
+        $state['processed_ids'] = array_merge($state['processed_ids'], $chunk_result['processed_ids']);
+        $state['failed_ids'] = array_merge($state['failed_ids'], $chunk_result['failed_ids']);
+        $state['errors'] = array_merge($state['errors'], $chunk_result['errors']);
+        $state['warnings'] = array_merge($state['warnings'], $chunk_result['warnings']);
+
+        // Recalculer les restants
+        $state['remaining_ids'] = array_diff(
+            $state['all_product_ids'],
+            $state['processed_ids'],
+            array_keys($state['failed_ids'])
+        );
+
+        $state['processed_count'] = count($state['processed_ids']);
+
+        return [
+            'is_complete' => empty($state['remaining_ids']),
+            'processed_in_chunk' => count($chunk_result['processed_ids']),
+            'failed_in_chunk' => count($chunk_result['failed_ids']),
+            'total_processed' => $state['processed_count'],
+            'total_remaining' => count($state['remaining_ids']),
+            'batch_number' => $state['current_batch'],
+            'progress' => $this->calculateProgress($state),
+            'updated_state' => $state
+        ];
     }
     /**
      * Save batch state for resume capability
@@ -551,10 +620,13 @@ final class BatchProcessor implements ServiceInterface
         $processed = count($state['processed_ids']);
         $failed = count($state['failed_ids']);
 
+        // CORRECTION : Ajouter success_count
+        $success_count = $processed; // Les produits traités avec succès
+
         return [
             'operation_id'    => $state['operation_id'],
             'total_products'  => $total,
-            'success_count'   => $processed,
+            'success_count'   => $success_count, // Défini ici
             'failed_count'    => $failed,
             'errors'          => $state['errors'],
             'warnings'        => $state['warnings'],
@@ -593,6 +665,26 @@ final class BatchProcessor implements ServiceInterface
         }
 
         return null;
+    }
+
+    /**
+     * Empêcher le retraitement des mêmes produits dans la même session
+     */
+    private function preventReprocessing(array &$state): void
+    {
+        $session_key = 'wbe_processed_session_' . $state['operation_id'];
+        $processed_in_session = get_transient($session_key);
+
+        if (!$processed_in_session) {
+            $processed_in_session = [];
+        }
+
+        // Filtrer les IDs déjà traités dans cette session
+        $state['remaining_ids'] = array_diff($state['remaining_ids'], $processed_in_session);
+
+        // Mettre à jour la session
+        $processed_in_session = array_merge($processed_in_session, $state['processed_ids']);
+        set_transient($session_key, $processed_in_session, HOUR_IN_SECONDS);
     }
 
     /**

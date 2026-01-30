@@ -357,60 +357,58 @@
      * Collecter les données de l'étape 2
      */
     /**
-     * CORRECTIF pour admin.js - Section collectStep2Data()
-     *
-     * PROBLÈME IDENTIFIÉ :
-     * La fonction collectStep2Data() doit utiliser les variables globales
-     * specificDates et exclusionDates au lieu de tenter de les parser depuis le DOM
-     */
+ * CORRECTIF pour admin.js - Section collectStep2Data()
+ * 
+ * PROBLÈME IDENTIFIÉ :
+ * La fonction collectStep2Data() doit utiliser les variables globales 
+ * specificDates et exclusionDates au lieu de tenter de les parser depuis le DOM
+ */
 
-    // ========================================
-    // SECTION À REMPLACER dans admin.js
-    // Ligne ~360 environ
-    // ========================================
+// ========================================
+// SECTION À REMPLACER dans admin.js
+// Ligne ~360 environ
+// ========================================
 
-    /**
-     * Collecter les données de l'étape 2 - VERSION CORRIGÉE
-     */
-    collectStep2Data: function () {
-      // ✅ CORRECTION : Utiliser directement les variables globales
-      const formData = {
-        start_date: this.convertDateToYMD($("#wbe-start-date").val()) || "",
-        end_date: this.convertDateToYMD($("#wbe-end-date").val()) || "",
-        weekdays: [],
-        specific: specificDates, // ✅ Variable globale définie en haut du fichier
-        exclusions: exclusionDates, // ✅ Variable globale définie en haut du fichier
-      };
-
-      // Récupérer les jours de la semaine cochés
-      $(".wbe-weekday-checkbox:checked").each(function () {
-        const dayName = $(this)
-          .attr("name")
-          .match(/\[(.*?)\]/)[1];
-        const dayMap = {
-          monday: 1,
-          tuesday: 2,
-          wednesday: 3,
-          thursday: 4,
-          friday: 5,
-          saturday: 6,
-          sunday: 0,
-        };
-        if (dayMap[dayName] !== undefined) {
-          formData.weekdays.push(dayMap[dayName]);
-        }
-      });
-
-      console.group("🔍 DEBUG collectStep2Data");
-      console.log("Start Date:", formData.start_date);
-      console.log("End Date:", formData.end_date);
-      console.log("Weekdays:", formData.weekdays);
-      console.log("Specific (from global var):", formData.specific);
-      console.log("Exclusions (from global var):", formData.exclusions);
-      console.groupEnd();
-
-      return formData;
-    },
+/**
+ * Collecter les données de l'étape 2 - VERSION CORRIGÉE
+ */
+collectStep2Data: function () {
+  // ✅ CORRECTION : Utiliser directement les variables globales
+  const formData = {
+    start_date: this.convertDateToYMD($("#wbe-start-date").val()) || "",
+    end_date: this.convertDateToYMD($("#wbe-end-date").val()) || "",
+    weekdays: [],
+    specific: specificDates,      // ✅ Variable globale définie en haut du fichier
+    exclusions: exclusionDates    // ✅ Variable globale définie en haut du fichier
+  };
+  
+  // Récupérer les jours de la semaine cochés
+  $(".wbe-weekday-checkbox:checked").each(function () {
+    const dayName = $(this).attr("name").match(/\[(.*?)\]/)[1];
+    const dayMap = {
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
+      sunday: 0
+    };
+    if (dayMap[dayName] !== undefined) {
+      formData.weekdays.push(dayMap[dayName]);
+    }
+  });
+  
+  console.group('🔍 DEBUG collectStep2Data');
+  console.log('Start Date:', formData.start_date);
+  console.log('End Date:', formData.end_date);
+  console.log('Weekdays:', formData.weekdays);
+  console.log('Specific (from global var):', formData.specific);
+  console.log('Exclusions (from global var):', formData.exclusions);
+  console.groupEnd();
+  
+  return formData;
+},
 
     /**
      * Validation côté client pour l'étape 2 - VERSION SIMPLIFIÉE
@@ -502,31 +500,6 @@
       // Permettre de fermer l'alerte
       $(document).on("click", ".notice-dismiss", function () {
         $(this).closest(".notice").remove();
-      });
-    },
-
-    processBatchChunk: function (operation_id, chunk_number = 1) {
-      $.ajax({
-        url: wbe_admin_data.ajax_url,
-        type: "POST",
-        data: {
-          action: "wbe_process_batch_chunk",
-          nonce: wbe_admin_data.nonce,
-          operation_id: operation_id,
-          chunk: chunk_number,
-        },
-        success: function (response) {
-          if (response.data.is_complete) {
-            // Traitement terminé
-            WBE_Admin.showToast("Succès", "Traitement terminé !");
-          } else {
-            // Continuer avec le chunk suivant
-            WBE_Admin.updateProgress(response.data.progress);
-            setTimeout(function () {
-              WBE_Admin.processBatchChunk(operation_id, chunk_number + 1);
-            }, 100); // Petit délai
-          }
-        },
       });
     },
 

@@ -245,296 +245,202 @@ function wbe(): ?WootourBulkEditor\Core\Plugin
     return wootour_bulk_editor();
 }
 
+
 /**
- * 🎯 Diagnostic Ciblé - Pourquoi les métadonnées ne sont pas écrites ?
+ * 🔬 DIAGNOSTIC ULTRA-DÉTAILLÉ - WootourRepository (BULK)
  * 
- * PROBLÈME : Les données arrivent au serveur mais ne s'écrivent pas dans WooTours
- * 
- * Ajouter ce code dans wootour-bulk-editor.php temporairement
+ * À ajouter dans wootour-bulk-editor.php
  */
 
-// =====================================
-// TEST 1 : Vérifier que updateAvailability() est appelé
-// =====================================
+add_action('admin_init', function () {
 
-add_action('init', function() {
-    // Hook pour tracer l'appel à updateAvailability
-    add_filter('wbe_before_repository_update', function($product_id, $data) {
-        error_log('');
-        error_log('========================================');
-        error_log('🔵 REPOSITORY updateAvailability() APPELÉ');
-        error_log('========================================');
-        error_log('Product ID: ' . $product_id);
-        error_log('Données reçues:');
-        error_log('  start_date: ' . ($data['start_date'] ?? 'NOT SET'));
-        error_log('  end_date: ' . ($data['end_date'] ?? 'NOT SET'));
-        error_log('  weekdays: ' . print_r($data['weekdays'] ?? [], true));
-        error_log('  specific: ' . print_r($data['specific'] ?? 'NOT SET', true));
-        error_log('  exclusions: ' . print_r($data['exclusions'] ?? 'NOT SET', true));
-        error_log('========================================');
-        error_log('');
-        
-        return $product_id;
-    }, 10, 2);
-});
-
-// =====================================
-// TEST 2 : Vérifier les UPDATE/ADD meta
-// =====================================
-
-add_action('update_post_metadata', function($check, $object_id, $meta_key, $meta_value) {
-    if (in_array($meta_key, ['wt_disabledate', 'wt_customdate', 'wt_disable_book'])) {
-        error_log('');
-        error_log('🟡 TENTATIVE UPDATE META');
-        error_log('  Key: ' . $meta_key);
-        error_log('  Product: ' . $object_id);
-        error_log('  Value Type: ' . gettype($meta_value));
-        error_log('  Value: ' . print_r($meta_value, true));
-        error_log('');
-    }
-    return $check;
-}, 10, 4);
-
-add_action('add_post_metadata', function($check, $object_id, $meta_key, $meta_value) {
-    if ($meta_key === 'wt_disable_book') {
-        error_log('');
-        error_log('🟢 TENTATIVE ADD META');
-        error_log('  Key: ' . $meta_key);
-        error_log('  Product: ' . $object_id);
-        error_log('  Value Type: ' . gettype($meta_value));
-        error_log('  Value: ' . print_r($meta_value, true));
-        error_log('');
-    }
-    return $check;
-}, 10, 4);
-
-add_action('updated_post_meta', function($meta_id, $object_id, $meta_key, $meta_value) {
-    if (in_array($meta_key, ['wt_disabledate', 'wt_customdate', 'wt_disable_book'])) {
-        error_log('');
-        error_log('✅ META UPDATED AVEC SUCCÈS');
-        error_log('  Key: ' . $meta_key);
-        error_log('  Product: ' . $object_id);
-        error_log('  Value: ' . print_r($meta_value, true));
-        error_log('');
-    }
-}, 10, 4);
-
-add_action('added_post_meta', function($meta_id, $object_id, $meta_key, $meta_value) {
-    if ($meta_key === 'wt_disable_book') {
-        error_log('');
-        error_log('✅ META ADDED AVEC SUCCÈS');
-        error_log('  Key: ' . $meta_key);
-        error_log('  Product: ' . $object_id);
-        error_log('  Value: ' . print_r($meta_value, true));
-        error_log('');
-    }
-}, 10, 4);
-
-// =====================================
-// TEST 3 : Vérification immédiate après traitement
-// =====================================
-
-add_action('woocommerce_update_product', function($product_id) {
-    static $checked = [];
-    
-    // Éviter les boucles infinies
-    if (isset($checked[$product_id])) {
+    if (!isset($_GET['wbe_deep_diagnostic'])) {
         return;
     }
-    $checked[$product_id] = true;
-    
-    error_log('');
-    error_log('========================================');
-    error_log('🔍 VÉRIFICATION POST-UPDATE Produit #' . $product_id);
-    error_log('========================================');
-    
-    $checks = [
-        'wt_disabledate' => true,
-        'wt_disable_book' => false,
-        'wt_customdate' => true,
-    ];
-    
-    foreach ($checks as $key => $single) {
-        $value = get_post_meta($product_id, $key, $single);
-        
-        error_log('');
-        error_log('Meta: ' . $key);
-        
-        if ($single) {
-            if (empty($value)) {
-                error_log('  ❌ VIDE ou ABSENT');
-            } else {
-                error_log('  ✅ Présent: ' . $value);
-                if (is_numeric($value)) {
-                    error_log('  📅 Date: ' . date('Y-m-d', $value));
-                }
-            }
-        } else {
-            if (empty($value)) {
-                error_log('  ❌ AUCUNE VALEUR');
-            } else {
-                error_log('  ✅ ' . count($value) . ' valeur(s)');
-                foreach ($value as $v) {
-                    if (is_numeric($v)) {
-                        error_log('    - ' . $v . ' (' . date('Y-m-d', $v) . ')');
-                    }
-                }
-            }
-        }
+
+    if (!current_user_can('manage_options')) {
+        wp_die('❌ Permissions insuffisantes');
     }
-    
-    error_log('========================================');
-    error_log('');
-}, 999);
 
-// =====================================
-// TEST MANUEL DIRECT
-// =====================================
+    // ✅ PRODUITS (TABLEAU)
+    $product_ids = [240, 215, 216];
 
-/**
- * Test direct d'écriture de métadonnées
- * URL: /wp-admin/?wbe_test_direct_write&product_id=240
- */
-add_action('admin_init', function() {
-    if (isset($_GET['wbe_test_direct_write'])) {
-        if (!current_user_can('manage_options')) {
-            wp_die('Permissions insuffisantes');
-        }
-        
-        $product_id = isset($_GET['product_id']) ? absint($_GET['product_id']) : 0;
-        
-        if (!$product_id) {
-            wp_die('Product ID requis. Usage: ?wbe_test_direct_write&product_id=240');
-        }
-        
-        echo '<h1>🧪 Test Direct d\'Écriture - Produit #' . $product_id . '</h1>';
-        
-        // Dates de test
-        $test_specific = '2026-01-31';
-        $test_exclusion = '2026-02-15';
-        
-        echo '<h2>📋 Dates de test</h2>';
-        echo '<ul>';
-        echo '<li>Date spécifique: ' . $test_specific . '</li>';
-        echo '<li>Date exclusion: ' . $test_exclusion . '</li>';
-        echo '</ul>';
-        
-        // Nettoyage
-        echo '<h2>🧹 Nettoyage des anciennes données</h2>';
-        delete_post_meta($product_id, 'wt_disabledate');
-        delete_post_meta($product_id, 'wt_disable_book');
-        delete_post_meta($product_id, 'wt_customdate');
-        echo '<p>✅ Métadonnées supprimées</p>';
-        
-        // Test 1: wt_customdate (date spécifique)
-        echo '<h2>📝 Test 1: wt_customdate</h2>';
-        $ts_specific = strtotime($test_specific);
-        $result1 = update_post_meta($product_id, 'wt_customdate', $ts_specific);
-        
-        if ($result1) {
-            echo '<p>✅ update_post_meta() retourné: TRUE</p>';
-        } else {
-            echo '<p>⚠️ update_post_meta() retourné: FALSE (peut être normal si la valeur n\'a pas changé)</p>';
-        }
-        
-        $verify1 = get_post_meta($product_id, 'wt_customdate', true);
-        if ($verify1) {
-            echo '<p>✅ Vérification: ' . $verify1 . ' (' . date('Y-m-d', $verify1) . ')</p>';
-        } else {
-            echo '<p>❌ ÉCHEC: La métadonnée n\'a PAS été enregistrée</p>';
-        }
-        
-        // Test 2: wt_disabledate (première exclusion)
-        echo '<h2>📝 Test 2: wt_disabledate</h2>';
-        $ts_exclusion = strtotime($test_exclusion);
-        $result2 = update_post_meta($product_id, 'wt_disabledate', $ts_exclusion);
-        
-        if ($result2) {
-            echo '<p>✅ update_post_meta() retourné: TRUE</p>';
-        } else {
-            echo '<p>⚠️ update_post_meta() retourné: FALSE</p>';
-        }
-        
-        $verify2 = get_post_meta($product_id, 'wt_disabledate', true);
-        if ($verify2) {
-            echo '<p>✅ Vérification: ' . $verify2 . ' (' . date('Y-m-d', $verify2) . ')</p>';
-        } else {
-            echo '<p>❌ ÉCHEC: La métadonnée n\'a PAS été enregistrée</p>';
-        }
-        
-        // Test 3: wt_disable_book (toutes les exclusions)
-        echo '<h2>📝 Test 3: wt_disable_book (add_post_meta)</h2>';
-        $result3 = add_post_meta($product_id, 'wt_disable_book', $ts_exclusion);
-        
-        if ($result3) {
-            echo '<p>✅ add_post_meta() retourné: ' . $result3 . ' (meta_id)</p>';
-        } else {
-            echo '<p>❌ add_post_meta() retourné: FALSE</p>';
-        }
-        
-        $verify3 = get_post_meta($product_id, 'wt_disable_book', false);
-        if (!empty($verify3)) {
-            echo '<p>✅ Vérification: ' . count($verify3) . ' valeur(s)</p>';
-            foreach ($verify3 as $v) {
-                echo '<p>  - ' . $v . ' (' . date('Y-m-d', $v) . ')</p>';
-            }
-        } else {
-            echo '<p>❌ ÉCHEC: Aucune valeur trouvée</p>';
-        }
-        
-        // Vérification finale
-        echo '<h2>🔍 Vérification dans WooTours</h2>';
-        echo '<p><a href="' . admin_url('post.php?post=' . $product_id . '&action=edit') . '" class="button button-primary" target="_blank">Ouvrir dans WooCommerce</a></p>';
-        echo '<p><em>Les dates devraient maintenant apparaître dans les champs "Disable date" et "Special Date" de WooTours</em></p>';
-        
-        // Instructions
-        echo '<h2>📋 Résultats attendus</h2>';
-        echo '<ul>';
-        echo '<li>Si TOUS les tests sont ✅ : Le problème est dans votre Repository</li>';
-        echo '<li>Si certains tests sont ❌ : Problème de permissions ou de base de données</li>';
-        echo '<li>Si les dates N\'apparaissent PAS dans WooTours : Mauvais format ou mauvaise meta key</li>';
-        echo '</ul>';
-        
+    ?>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Diagnostic Profond - Repository (BULK)</title>
+        <style>
+            body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4; }
+            .success { color: #4ec9b0; }
+            .error { color: #f48771; }
+            .warning { color: #dcdcaa; }
+            .info { color: #9cdcfe; }
+            pre { background: #2d2d2d; padding: 15px; border-left: 3px solid #007acc; overflow-x: auto; }
+            h1, h2, h3 { color: #4ec9b0; }
+            hr { border: 1px solid #3e3e3e; }
+            table { border-collapse: collapse; margin: 10px 0; }
+            td, th { border: 1px solid #555; padding: 6px 10px; }
+        </style>
+    </head>
+    <body>
+
+    <h1>🔬 Diagnostic Profond - WootourRepository (BULK)</h1>
+    <p class="info">Produits testés : <?php echo implode(', ', $product_ids); ?></p>
+    <hr>
+
+    <?php
+    // ==========================================
+    // TEST 1 : Chargement du Repository
+    // ==========================================
+    echo '<h2>1️⃣ Chargement du Repository</h2>';
+
+    try {
+        $repo = \WootourBulkEditor\Repositories\WootourRepository::getInstance();
+        echo '<p class="success">✅ WootourRepository chargé</p>';
+    } catch (\Exception $e) {
+        echo '<p class="error">❌ Impossible de charger le Repository : ' . $e->getMessage() . '</p>';
         exit;
     }
+
+    // ==========================================
+    // TEST 2 : Récupération availability existante
+    // ==========================================
+    echo '<h2>2️⃣ Availability existante</h2>';
+
+    foreach ($product_ids as $pid) {
+        try {
+            echo "<h3>Produit #{$pid}</h3>";
+            $existing = $repo->getAvailability($pid);
+            echo '<pre>';
+            print_r($existing->toArray());
+            echo '</pre>';
+        } catch (\Exception $e) {
+            echo '<p class="error">❌ getAvailability() : ' . $e->getMessage() . '</p>';
+        }
+    }
+
+    // ==========================================
+    // TEST 3 : Données de test
+    // ==========================================
+    echo '<h2>3️⃣ Données de test</h2>';
+
+    $test_data = [
+        'start_date' => '2026-02-01',
+        'end_date' => '2026-02-28',
+        'weekdays' => [1, 2, 3, 4, 5],
+        'specific' => ['2026-02-14'],
+        'exclusions' => ['2026-02-22'],
+    ];
+
+    echo '<pre>';
+    print_r($test_data);
+    echo '</pre>';
+
+    // ==========================================
+    // TEST 4 : updateAvailability BULK
+    // ==========================================
+    echo '<h2>4️⃣ updateAvailability() BULK</h2>';
+
+    $global_result = true;
+
+    foreach ($product_ids as $pid) {
+
+        echo "<h3>Produit #{$pid}</h3>";
+
+        $payload = $test_data;
+        $payload['product_id'] = $pid;
+
+        error_log("🔬 BULK updateAvailability | Product #{$pid}");
+        error_log(print_r($payload, true));
+
+        $result = $repo->updateAvailability($pid, $payload);
+
+        if ($result) {
+            echo '<p class="success">✅ updateAvailability OK</p>';
+        } else {
+            echo '<p class="error">❌ updateAvailability FAILED</p>';
+            $global_result = false;
+        }
+    }
+
+    // ==========================================
+    // TEST 5 : Vérification des métadonnées
+    // ==========================================
+    echo '<h2>5️⃣ Vérification des métadonnées</h2>';
+
+    $checks = [
+        'wt_customdate' => true,
+        'wt_disabledate' => true,
+        'wt_disable_book' => false,
+    ];
+
+    foreach ($product_ids as $pid) {
+
+        echo "<h3>Produit #{$pid}</h3>";
+        echo '<table>';
+        echo '<tr><th>Meta key</th><th>Valeur</th></tr>';
+
+        foreach ($checks as $key => $single) {
+            $value = get_post_meta($pid, $key, $single);
+
+            echo '<tr>';
+            echo '<td><code>' . $key . '</code></td>';
+            echo '<td>' . (empty($value) ? '<span class="error">VIDE</span>' : '<span class="success">OK</span>') . '</td>';
+            echo '</tr>';
+        }
+
+        echo '</table>';
+    }
+
+    // ==========================================
+    // TEST 6 : Nettoyage + écriture manuelle BULK
+    // ==========================================
+    echo '<h2>6️⃣ Test manuel des métas (BULK)</h2>';
+
+    $ts = strtotime('2026-02-14');
+
+    foreach ($product_ids as $pid) {
+
+        delete_post_meta($pid, 'wt_disabledate');
+        delete_post_meta($pid, 'wt_disable_book');
+        delete_post_meta($pid, 'wt_customdate');
+
+        update_post_meta($pid, 'wt_customdate', $ts);
+        add_post_meta($pid, 'wt_disable_book', $ts);
+
+        echo "<p class='success'>✅ Métas mises à jour pour produit #{$pid}</p>";
+    }
+
+    // ==========================================
+    // CONCLUSION
+    // ==========================================
+    echo '<hr>';
+    echo '<h2>📋 Conclusion</h2>';
+
+    if ($global_result) {
+        echo '<p class="success"><strong>✅ BULK updateAvailability fonctionnel</strong></p>';
+    } else {
+        echo '<p class="error"><strong>❌ Des erreurs sont survenues (voir logs)</strong></p>';
+    }
+    ?>
+
+    <hr>
+    <h3>🔗 Liens produits</h3>
+    <?php foreach ($product_ids as $pid): ?>
+        <p>
+            <a href="<?php echo admin_url('post.php?post=' . $pid . '&action=edit'); ?>" target="_blank" style="color:#4ec9b0;">
+                Ouvrir produit #<?php echo $pid; ?>
+            </a>
+        </p>
+    <?php endforeach; ?>
+
+    </body>
+    </html>
+    <?php
+
+    exit;
 });
-
-/**
- * INSTRUCTIONS D'UTILISATION
- * ==========================
- * 
- * 1. Coller ce code dans wootour-bulk-editor.php
- * 
- * 2. Activer WP_DEBUG dans wp-config.php
- * 
- * 3. Tester l'écriture directe:
- *    /wp-admin/?wbe_test_direct_write&product_id=240
- * 
- * 4. Vérifier dans WooTours si les dates apparaissent
- * 
- * 5. Essayer l'édition en masse depuis votre plugin
- * 
- * 6. Vérifier /wp-content/debug.log pour voir:
- *    - Si updateAvailability() est appelé
- *    - Si les tentatives d'update_post_meta sont faites
- *    - Si elles réussissent
- * 
- * SCÉNARIOS POSSIBLES:
- * ====================
- * 
- * Scénario A: Le test direct fonctionne mais pas le plugin
- * → Problème dans WootourRepository::updateWootourTimestampMeta()
- * → Solution: Vérifier que la méthode est bien appelée
- * 
- * Scénario B: Le test direct ne fonctionne pas
- * → Problème de permissions WordPress ou de base de données
- * → Vérifier les permissions de l'utilisateur
- * 
- * Scénario C: Les métadonnées sont écrites mais invisibles dans WooTours
- * → Mauvais format de données ou mauvaise meta key
- * → WooTours attend peut-être un format spécifique
- */
-
 
 // Debug du code WooTour
 add_action('admin_init', function() {

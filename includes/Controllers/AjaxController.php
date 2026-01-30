@@ -941,7 +941,7 @@ final class AjaxController
         $product_ids = $this->parse_product_ids();
         $changes = $this->parse_changes();
         $sample_size = min(20, max(1, (int) ($_REQUEST['sample_size'] ?? 5)));
-
+        error_log('test');
         if (empty($product_ids)) {
             throw new ValidationException('No products selected for preview.');
         }
