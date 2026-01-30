@@ -101,6 +101,45 @@ final class AvailabilityService implements ServiceInterface
             }
         }
 
+        if (!empty($changes['specific'])) {
+            error_log('[WBE AvailabilityService] Processing specific dates: ' . print_r($changes['specific'], true));
+
+            // Récupérer les dates existantes
+            $current_specific = $merged->getSpecificDates();
+            error_log('[WBE AvailabilityService] Current specific dates: ' . print_r($current_specific, true));
+
+            // Fusionner avec les nouvelles
+            $new_specific = array_unique(array_merge($current_specific, $changes['specific']));
+            error_log('[WBE AvailabilityService] New specific dates: ' . print_r($new_specific, true));
+
+            // Ajouter au merged
+            if (method_exists($merged, 'withSpecificDates')) {
+                $merged = $merged->withSpecificDates($new_specific);
+                error_log('[WBE AvailabilityService] Used withSpecificDates() method');
+            } else {
+                // Solution de repli
+                $data = $merged->toArray();
+                $data['specific'] = $new_specific;
+                $merged = new Availability($data);
+                error_log('[WBE AvailabilityService] Created new Availability object');
+            }
+        }
+
+        if (!empty($changes['exclusions'])) {
+            error_log('[WBE AvailabilityService] Processing exclusions: ' . print_r($changes['exclusions'], true));
+
+            $current_exclusions = $merged->getExclusions();
+            $new_exclusions = array_unique(array_merge($current_exclusions, $changes['exclusions']));
+
+            if (method_exists($merged, 'withExclusions')) {
+                $merged = $merged->withExclusions($new_exclusions);
+            } else {
+                $data = $merged->toArray();
+                $data['exclusions'] = $new_exclusions;
+                $merged = new Availability($data);
+            }
+        }
+
         error_log('[WBE AvailabilityService] Merged result: ' . print_r($merged->toArray(), true));
 
         return $merged;

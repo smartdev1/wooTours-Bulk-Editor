@@ -695,7 +695,7 @@ final class AjaxController
             throw new ValidationException('Product not found.');
         }
 
-        // Récupérer la clé meta WooTour
+        // Récupérer la clé meta WooTour principale
         $meta_key = Constants::get_verified_meta_key();
         if (!$meta_key) {
             return [
@@ -708,28 +708,36 @@ final class AjaxController
             ];
         }
 
-        // Récupérer les données de disponibilité
+        // Récupérer les données de disponibilité principales
         $availability_data = get_post_meta($product_id, $meta_key, true);
 
-        if (empty($availability_data)) {
-            return [
-                'success' => true,
-                'data' => [
-                    'product_id' => $product_id,
-                    'has_data' => false,
-                    'message' => 'No availability data found for this product.'
-                ]
-            ];
-        }
+        // Récupérer les meta keys spécifiques WooTour
+        // Dates exclues: wt_disable_book et wt_disabledate
+        $excluded_dates_1 = get_post_meta($product_id, 'wt_disable_book', true);
+        $excluded_dates_2 = get_post_meta($product_id, 'wt_disabledate', true);
+        
+        // Dates spéciales: wt_customdate
+        $special_dates = get_post_meta($product_id, 'wt_customdate', true);
+
+        // Logger les données brutes pour debug
+        error_log('[WBE] Product ' . $product_id . ' - wt_disable_book: ' . print_r($excluded_dates_1, true));
+        error_log('[WBE] Product ' . $product_id . ' - wt_disabledate: ' . print_r($excluded_dates_2, true));
+        error_log('[WBE] Product ' . $product_id . ' - wt_customdate: ' . print_r($special_dates, true));
 
         // Parser les données selon le format WooTour
-        $parsed_data = $this->parse_wootour_availability($availability_data);
+        $parsed_data = $this->parse_wootour_availability(
+            $availability_data, 
+            $excluded_dates_1, 
+            $excluded_dates_2, 
+            $special_dates,
+            $product_id
+        );
 
         return [
             'success' => true,
             'data' => array_merge([
                 'product_id' => $product_id,
-                'has_data' => true,
+                'has_data' => !empty($availability_data) || !empty($excluded_dates_1) || !empty($excluded_dates_2) || !empty($special_dates),
                 'product_name' => $product->get_name(),
             ], $parsed_data)
         ];
@@ -738,10 +746,20 @@ final class AjaxController
     /**
      * Parser les données de disponibilité WooTour
      * 
-     * @param mixed $availability_data Données brutes de disponibilité
+     * @param mixed $availability_data Données brutes de disponibilité principales
+     * @param mixed $excluded_dates_1 Dates exclues (wt_disable_book)
+     * @param mixed $excluded_dates_2 Dates exclues (wt_disabledate)
+     * @param mixed $special_dates Dates spéciales (wt_customdate)
+     * @param int $product_id ID du produit (pour debug)
      * @return array Données parsées et formatées
      */
-    private function parse_wootour_availability($availability_data): array
+    private function parse_wootour_availability(
+        $availability_data, 
+        $excluded_dates_1 = null, 
+        $excluded_dates_2 = null, 
+        $special_dates = null,
+        $product_id = 0
+    ): array
     {
         $result = [
             'start_date' => '',
@@ -768,25 +786,114 @@ final class AjaxController
                 $result['weekdays'] = array_map('intval', $availability_data['weekdays']);
             }
 
-            // Dates spécifiques
+            // Dates spécifiques (depuis availability_data)
             if (!empty($availability_data['specific']) && is_array($availability_data['specific'])) {
                 $result['specific'] = array_map([$this, 'normalize_date'], $availability_data['specific']);
             }
 
-            // Exclusions
+            // Exclusions (depuis availability_data)
             if (!empty($availability_data['exclusions']) && is_array($availability_data['exclusions'])) {
                 $result['exclusions'] = array_map([$this, 'normalize_date'], $availability_data['exclusions']);
             }
         }
         // Si c'est une chaîne sérialisée, la désérialiser d'abord
-        elseif (is_string($availability_data)) {
+        elseif (is_string($availability_data) && !empty($availability_data)) {
             $unserialized = @unserialize($availability_data);
             if (is_array($unserialized)) {
-                return $this->parse_wootour_availability($unserialized);
+                return $this->parse_wootour_availability(
+                    $unserialized, 
+                    $excluded_dates_1, 
+                    $excluded_dates_2, 
+                    $special_dates,
+                    $product_id
+                );
             }
         }
 
+        // === TRAITER LES META KEYS WOOTOUR SPÉCIFIQUES ===
+
+        // 1. Dates spéciales (wt_customdate)
+        $parsed_special_dates = $this->parse_wootour_date_meta($special_dates, 'wt_customdate', $product_id);
+        if (!empty($parsed_special_dates)) {
+            // Fusionner avec les dates spécifiques existantes
+            $result['specific'] = array_unique(array_merge($result['specific'], $parsed_special_dates));
+        }
+
+        // 2. Dates exclues (wt_disable_book)
+        $parsed_excluded_1 = $this->parse_wootour_date_meta($excluded_dates_1, 'wt_disable_book', $product_id);
+        if (!empty($parsed_excluded_1)) {
+            $result['exclusions'] = array_unique(array_merge($result['exclusions'], $parsed_excluded_1));
+        }
+
+        // 3. Dates exclues (wt_disabledate)
+        $parsed_excluded_2 = $this->parse_wootour_date_meta($excluded_dates_2, 'wt_disabledate', $product_id);
+        if (!empty($parsed_excluded_2)) {
+            $result['exclusions'] = array_unique(array_merge($result['exclusions'], $parsed_excluded_2));
+        }
+
+        // Trier les dates pour un affichage cohérent
+        sort($result['specific']);
+        sort($result['exclusions']);
+
+        error_log('[WBE] Product ' . $product_id . ' - Final parsed data: ' . print_r($result, true));
+
         return $result;
+    }
+
+    /**
+     * Parser une meta key WooTour contenant des dates
+     * 
+     * @param mixed $meta_value Valeur de la meta key
+     * @param string $meta_key Nom de la meta key (pour debug)
+     * @param int $product_id ID du produit (pour debug)
+     * @return array Tableau de dates normalisées
+     */
+    private function parse_wootour_date_meta($meta_value, string $meta_key, int $product_id): array
+    {
+        $dates = [];
+
+        if (empty($meta_value)) {
+            return $dates;
+        }
+
+        // Cas 1: C'est déjà un tableau de dates
+        if (is_array($meta_value)) {
+            foreach ($meta_value as $date) {
+                if (is_string($date) && !empty($date)) {
+                    $normalized = $this->normalize_date($date);
+                    if ($normalized) {
+                        $dates[] = $normalized;
+                    }
+                }
+                // Cas où c'est un tableau de tableaux (ex: [['date' => '2026-01-01'], ...])
+                elseif (is_array($date) && isset($date['date'])) {
+                    $normalized = $this->normalize_date($date['date']);
+                    if ($normalized) {
+                        $dates[] = $normalized;
+                    }
+                }
+            }
+        }
+        // Cas 2: C'est une chaîne sérialisée
+        elseif (is_string($meta_value)) {
+            // Essayer de désérialiser
+            $unserialized = @unserialize($meta_value);
+            if (is_array($unserialized)) {
+                return $this->parse_wootour_date_meta($unserialized, $meta_key, $product_id);
+            }
+            
+            // Sinon, essayer de parser comme une date unique
+            $normalized = $this->normalize_date($meta_value);
+            if ($normalized) {
+                $dates[] = $normalized;
+            }
+        }
+
+        if (!empty($dates)) {
+            error_log('[WBE] Product ' . $product_id . ' - Parsed ' . count($dates) . ' dates from ' . $meta_key);
+        }
+
+        return $dates;
     }
 
     /**
@@ -934,9 +1041,9 @@ final class AjaxController
 
         error_log('[WBE AjaxController] === START parse_changes ===');
         error_log('[WBE AjaxController] RAW REQUEST: ' . print_r($_REQUEST, true));
-
         // Parse each field with sanitization
         $fields = ['start_date', 'end_date', 'weekdays', 'exclusions', 'specific'];
+        
 
         foreach ($fields as $field) {
             if (isset($_REQUEST[$field])) {

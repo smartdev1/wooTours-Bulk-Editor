@@ -60,6 +60,35 @@ class AdminController
         return false;
     }
 
+    private function handle_process_batch_chunk(): array
+    {
+        $operation_id = sanitize_text_field($_REQUEST['operation_id'] ?? '');
+        $chunk_number = (int) ($_REQUEST['chunk'] ?? 1);
+
+        if (empty($operation_id)) {
+            throw new ValidationException('Operation ID required.');
+        }
+
+        // Récupérer l'état sauvegardé
+        $state = get_transient('wbe_resume_' . $operation_id);
+
+        if (empty($state)) {
+            throw new ValidationException('Operation not found or expired.');
+        }
+
+        // Traiter UN SEUL chunk
+        $result = $this->batch_processor->processSingleChunk($state);
+
+        // Mettre à jour et sauvegarder l'état
+        $state = array_merge($state, $result['updated_state']);
+        set_transient('wbe_resume_' . $operation_id, $state, HOUR_IN_SECONDS);
+
+        return [
+            'success' => true,
+            'data' => $result
+        ];
+    }
+
     public function enqueue_admin_assets(string $hook_suffix): void
     {
         if ($hook_suffix !== $this->page_hook) {

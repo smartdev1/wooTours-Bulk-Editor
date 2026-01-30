@@ -50,19 +50,19 @@
       // Initialiser les datepickers pour l'ajout
       $("#wbe-add-specific-date").datepicker({
         dateFormat: wbe_admin_data.date_format_js || "dd/mm/yy",
-        minDate: 0
+        minDate: 0,
       });
 
       $("#wbe-add-exclusion-date").datepicker({
         dateFormat: wbe_admin_data.date_format_js || "dd/mm/yy",
-        minDate: 0
+        minDate: 0,
       });
 
       // Ajouter une date spécifique
       $("#wbe-add-specific-btn").on("click", function () {
         const dateInput = $("#wbe-add-specific-date");
         const dateValue = dateInput.val().trim();
-        
+
         if (!dateValue) {
           self.showToast("Erreur", "Veuillez sélectionner une date", "error");
           return;
@@ -80,9 +80,17 @@
           specificDates.push(convertedDate);
           self.updateSpecificDatesList();
           dateInput.val("");
-          self.showToast("Succès", "Date ajoutée aux dates spécifiques", "success");
+          self.showToast(
+            "Succès",
+            "Date ajoutée aux dates spécifiques",
+            "success",
+          );
         } else {
-          self.showToast("Avertissement", "Cette date est déjà ajoutée", "warning");
+          self.showToast(
+            "Avertissement",
+            "Cette date est déjà ajoutée",
+            "warning",
+          );
         }
       });
 
@@ -90,7 +98,7 @@
       $("#wbe-add-exclusion-btn").on("click", function () {
         const dateInput = $("#wbe-add-exclusion-date");
         const dateValue = dateInput.val().trim();
-        
+
         if (!dateValue) {
           self.showToast("Erreur", "Veuillez sélectionner une date", "error");
           return;
@@ -110,25 +118,45 @@
           dateInput.val("");
           self.showToast("Succès", "Date ajoutée aux exclusions", "success");
         } else {
-          self.showToast("Avertissement", "Cette date est déjà exclue", "warning");
+          self.showToast(
+            "Avertissement",
+            "Cette date est déjà exclue",
+            "warning",
+          );
         }
       });
 
       // Effacer toutes les dates spécifiques
       $("#wbe-clear-specific").on("click", function () {
-        if (specificDates.length > 0 && confirm("Voulez-vous vraiment supprimer toutes les dates spécifiques ?")) {
+        if (
+          specificDates.length > 0 &&
+          confirm(
+            "Voulez-vous vraiment supprimer toutes les dates spécifiques ?",
+          )
+        ) {
           specificDates = [];
           self.updateSpecificDatesList();
-          self.showToast("Information", "Toutes les dates spécifiques ont été supprimées", "info");
+          self.showToast(
+            "Information",
+            "Toutes les dates spécifiques ont été supprimées",
+            "info",
+          );
         }
       });
 
       // Effacer toutes les exclusions
       $("#wbe-clear-exclusions").on("click", function () {
-        if (exclusionDates.length > 0 && confirm("Voulez-vous vraiment supprimer toutes les exclusions ?")) {
+        if (
+          exclusionDates.length > 0 &&
+          confirm("Voulez-vous vraiment supprimer toutes les exclusions ?")
+        ) {
           exclusionDates = [];
           self.updateExclusionDatesList();
-          self.showToast("Information", "Toutes les dates exclues ont été supprimées", "info");
+          self.showToast(
+            "Information",
+            "Toutes les dates exclues ont été supprimées",
+            "info",
+          );
         }
       });
       self.updateSpecificDatesList();
@@ -141,16 +169,18 @@
     updateSpecificDatesList: function () {
       const $list = $("#wbe-specific-dates-list");
       $list.empty();
-      
+
       if (specificDates.length === 0) {
         $list.attr("data-empty-text", "Aucune date spécifique ajoutée");
-        $list.html('<div class="wbe-empty-list">Aucune date spécifique ajoutée</div>');
+        $list.html(
+          '<div class="wbe-empty-list">Aucune date spécifique ajoutée</div>',
+        );
         return;
       }
 
       // Trier les dates
       specificDates.sort();
-      
+
       specificDates.forEach(function (date) {
         const $item = $('<div class="wbe-date-item"></div>');
         const displayDate = WBE_Admin.formatDateForDisplay(date);
@@ -164,9 +194,13 @@
       // Ajouter l'événement de suppression
       $list.find(".remove-date").on("click", function () {
         const dateToRemove = $(this).data("date");
-        specificDates = specificDates.filter(d => d !== dateToRemove);
+        specificDates = specificDates.filter((d) => d !== dateToRemove);
         WBE_Admin.updateSpecificDatesList();
-        WBE_Admin.showToast("Information", "Date supprimée des dates spécifiques", "info");
+        WBE_Admin.showToast(
+          "Information",
+          "Date supprimée des dates spécifiques",
+          "info",
+        );
       });
     },
 
@@ -176,7 +210,7 @@
     updateExclusionDatesList: function () {
       const $list = $("#wbe-exclusions-list");
       $list.empty();
-      
+
       if (exclusionDates.length === 0) {
         $list.attr("data-empty-text", "Aucune date exclue");
         $list.html('<div class="wbe-empty-list">Aucune date exclue</div>');
@@ -185,7 +219,7 @@
 
       // Trier les dates
       exclusionDates.sort();
-      
+
       exclusionDates.forEach(function (date) {
         const $item = $('<div class="wbe-date-item"></div>');
         const displayDate = WBE_Admin.formatDateForDisplay(date);
@@ -199,9 +233,13 @@
       // Ajouter l'événement de suppression
       $list.find(".remove-date").on("click", function () {
         const dateToRemove = $(this).data("date");
-        exclusionDates = exclusionDates.filter(d => d !== dateToRemove);
+        exclusionDates = exclusionDates.filter((d) => d !== dateToRemove);
         WBE_Admin.updateExclusionDatesList();
-        WBE_Admin.showToast("Information", "Date supprimée des exclusions", "info");
+        WBE_Admin.showToast(
+          "Information",
+          "Date supprimée des exclusions",
+          "info",
+        );
       });
     },
 
@@ -214,7 +252,7 @@
       $(".wbe-next-step").on("click", function (e) {
         e.preventDefault();
         const nextStep = parseInt($(this).data("next"));
-        
+
         // Validation spéciale pour le passage à l'étape 3
         if (nextStep === 3) {
           self.validateAndGoToStep3();
@@ -242,40 +280,43 @@
      */
     validateAndGoToStep3: function () {
       const self = this;
-      
+
       // Collecter les données de l'étape 2
       const formData = this.collectStep2Data();
-      
+
       // Validation côté client rapide
       const clientErrors = this.validateStep2Client(formData);
       if (clientErrors.length > 0) {
         this.showValidationErrors(clientErrors);
         return;
       }
-      
+
       // Afficher un indicateur de chargement
       const $button = $('.wbe-next-step[data-next="3"]');
       const originalText = $button.html();
-      $button.html(
-        '<span class="spinner is-active" style="margin: 0 5px"></span> Validation...'
-      ).prop("disabled", true);
+      $button
+        .html(
+          '<span class="spinner is-active" style="margin: 0 5px"></span> Validation...',
+        )
+        .prop("disabled", true);
 
       // Envoyer les données au serveur pour validation
       $.ajax({
         url: wbe_admin_data.ajax_url,
         type: "POST",
         data: {
-          action: wbe_admin_data.ajax_actions?.validate_dates || "wbe_validate_dates",
+          action:
+            wbe_admin_data.ajax_actions?.validate_dates || "wbe_validate_dates",
           nonce: wbe_admin_data.nonce,
           start_date: formData.start_date,
           end_date: formData.end_date,
           weekdays: formData.weekdays,
           specific: formData.specific,
-          exclusions: formData.exclusions
+          exclusions: formData.exclusions,
         },
         success: function (response) {
           $button.html(originalText).prop("disabled", false);
-          
+
           if (response.success && response.data.valid) {
             // Mettre à jour les données du formulaire
             self.formData.start_date = formData.start_date;
@@ -283,14 +324,18 @@
             self.formData.weekdays = formData.weekdays;
             self.formData.specific_dates = formData.specific;
             self.formData.exclusions = formData.exclusions;
-            
+
             // Passer à l'étape 3
             self.goToStep(3);
-            
+
             // Mettre à jour le résumé
             self.updateReviewSummary(formData);
-            
-            self.showToast("Validation réussie", "Configuration validée avec succès", "success");
+
+            self.showToast(
+              "Validation réussie",
+              "Configuration validée avec succès",
+              "success",
+            );
           } else {
             // Afficher les erreurs
             const errors = response.data?.errors || ["Erreur de validation"];
@@ -299,26 +344,49 @@
         },
         error: function (xhr, status, error) {
           $button.html(originalText).prop("disabled", false);
-          self.showToast("Erreur", "La validation a échoué. Veuillez réessayer.", "error");
-        }
+          self.showToast(
+            "Erreur",
+            "La validation a échoué. Veuillez réessayer.",
+            "error",
+          );
+        },
       });
     },
 
     /**
      * Collecter les données de l'étape 2
      */
+    /**
+     * CORRECTIF pour admin.js - Section collectStep2Data()
+     *
+     * PROBLÈME IDENTIFIÉ :
+     * La fonction collectStep2Data() doit utiliser les variables globales
+     * specificDates et exclusionDates au lieu de tenter de les parser depuis le DOM
+     */
+
+    // ========================================
+    // SECTION À REMPLACER dans admin.js
+    // Ligne ~360 environ
+    // ========================================
+
+    /**
+     * Collecter les données de l'étape 2 - VERSION CORRIGÉE
+     */
     collectStep2Data: function () {
+      // ✅ CORRECTION : Utiliser directement les variables globales
       const formData = {
         start_date: this.convertDateToYMD($("#wbe-start-date").val()) || "",
         end_date: this.convertDateToYMD($("#wbe-end-date").val()) || "",
         weekdays: [],
-        specific: specificDates,
-        exclusions: exclusionDates
+        specific: specificDates, // ✅ Variable globale définie en haut du fichier
+        exclusions: exclusionDates, // ✅ Variable globale définie en haut du fichier
       };
-      
+
       // Récupérer les jours de la semaine cochés
       $(".wbe-weekday-checkbox:checked").each(function () {
-        const dayName = $(this).attr("name").match(/\[(.*?)\]/)[1];
+        const dayName = $(this)
+          .attr("name")
+          .match(/\[(.*?)\]/)[1];
         const dayMap = {
           monday: 1,
           tuesday: 2,
@@ -326,14 +394,21 @@
           thursday: 4,
           friday: 5,
           saturday: 6,
-          sunday: 0
+          sunday: 0,
         };
         if (dayMap[dayName] !== undefined) {
           formData.weekdays.push(dayMap[dayName]);
         }
       });
-      
-      console.log("Données collectées pour l'étape 2:", formData);
+
+      console.group("🔍 DEBUG collectStep2Data");
+      console.log("Start Date:", formData.start_date);
+      console.log("End Date:", formData.end_date);
+      console.log("Weekdays:", formData.weekdays);
+      console.log("Specific (from global var):", formData.specific);
+      console.log("Exclusions (from global var):", formData.exclusions);
+      console.groupEnd();
+
       return formData;
     },
 
@@ -343,38 +418,50 @@
      */
     validateStep2Client: function (formData) {
       const errors = [];
-      
+
       // 1. Vérifier la cohérence des dates (soit aucune, soit les deux)
       const hasStartDate = !!formData.start_date;
       const hasEndDate = !!formData.end_date;
-      
+
       if (hasStartDate !== hasEndDate) {
         if (hasStartDate && !hasEndDate) {
-          errors.push("La date de fin est requise si vous définissez une date de début.");
+          errors.push(
+            "La date de fin est requise si vous définissez une date de début.",
+          );
         } else if (!hasStartDate && hasEndDate) {
-          errors.push("La date de début est requise si vous définissez une date de fin.");
+          errors.push(
+            "La date de début est requise si vous définissez une date de fin.",
+          );
         }
       }
-      
+
       // 2. Si les deux dates sont présentes, vérifier que fin >= début
       if (hasStartDate && hasEndDate) {
         const startTime = new Date(formData.start_date).getTime();
         const endTime = new Date(formData.end_date).getTime();
-        
+
         if (endTime < startTime) {
-          errors.push("La date de fin ne peut pas être antérieure à la date de début.");
+          errors.push(
+            "La date de fin ne peut pas être antérieure à la date de début.",
+          );
         }
       }
-      
+
       // 3. Vérifier les conflits entre dates spécifiques et exclusions
       if (formData.specific.length > 0 && formData.exclusions.length > 0) {
-        const conflicts = formData.specific.filter(date => formData.exclusions.includes(date));
+        const conflicts = formData.specific.filter((date) =>
+          formData.exclusions.includes(date),
+        );
         if (conflicts.length > 0) {
-          const conflictDatesFormatted = conflicts.map(date => this.formatDateForDisplay(date));
-          errors.push(`Les dates suivantes sont à la fois marquées comme disponibles et exclues : ${conflictDatesFormatted.join(", ")}`);
+          const conflictDatesFormatted = conflicts.map((date) =>
+            this.formatDateForDisplay(date),
+          );
+          errors.push(
+            `Les dates suivantes sont à la fois marquées comme disponibles et exclues : ${conflictDatesFormatted.join(", ")}`,
+          );
         }
       }
-      
+
       return errors;
     },
 
@@ -383,35 +470,63 @@
      */
     showValidationErrors: function (errors) {
       $('.wbe-step-content[data-step="2"] .notice').remove();
-      
+
       if (errors.length === 0) return;
-      
-      let errorHtml = '<div class="notice notice-error is-dismissible" style="margin: 10px 0;">';
-      errorHtml += '<p><strong>Veuillez corriger les erreurs suivantes :</strong></p>';
+
+      let errorHtml =
+        '<div class="notice notice-error is-dismissible" style="margin: 10px 0;">';
+      errorHtml +=
+        "<p><strong>Veuillez corriger les erreurs suivantes :</strong></p>";
       errorHtml += '<ul style="margin-left: 20px;">';
-      
+
       errors.forEach(function (error) {
         errorHtml += "<li>" + WBE_Admin.escapeHtml(error) + "</li>";
       });
-      
+
       errorHtml += "</ul>";
-      errorHtml += '<button type="button" class="notice-dismiss"><span class="screen-reader-text">Fermer</span></button>';
+      errorHtml +=
+        '<button type="button" class="notice-dismiss"><span class="screen-reader-text">Fermer</span></button>';
       errorHtml += "</div>";
-      
+
       // Ajouter la nouvelle alerte
       $(errorHtml).prependTo('.wbe-step-content[data-step="2"] .wbe-card-body');
-      
+
       // Faire défiler jusqu'aux erreurs
       $("html, body").animate(
         {
           scrollTop: $('.wbe-step-content[data-step="2"]').offset().top - 50,
         },
-        500
+        500,
       );
-      
+
       // Permettre de fermer l'alerte
       $(document).on("click", ".notice-dismiss", function () {
         $(this).closest(".notice").remove();
+      });
+    },
+
+    processBatchChunk: function (operation_id, chunk_number = 1) {
+      $.ajax({
+        url: wbe_admin_data.ajax_url,
+        type: "POST",
+        data: {
+          action: "wbe_process_batch_chunk",
+          nonce: wbe_admin_data.nonce,
+          operation_id: operation_id,
+          chunk: chunk_number,
+        },
+        success: function (response) {
+          if (response.data.is_complete) {
+            // Traitement terminé
+            WBE_Admin.showToast("Succès", "Traitement terminé !");
+          } else {
+            // Continuer avec le chunk suivant
+            WBE_Admin.updateProgress(response.data.progress);
+            setTimeout(function () {
+              WBE_Admin.processBatchChunk(operation_id, chunk_number + 1);
+            }, 100); // Petit délai
+          }
+        },
       });
     },
 
@@ -437,7 +552,7 @@
 
       $("html, body").animate(
         { scrollTop: $(".wbe-admin-wrap").offset().top - 50 },
-        300
+        300,
       );
     },
 
@@ -447,7 +562,11 @@
     validateStep: function (step) {
       if (step === 1) {
         if (this.selectedProducts.length === 0) {
-          this.showToast("Erreur", "Veuillez sélectionner au moins un produit", "error");
+          this.showToast(
+            "Erreur",
+            "Veuillez sélectionner au moins un produit",
+            "error",
+          );
           return false;
         }
       }
@@ -467,7 +586,7 @@
         dateFormat: wbe_admin_data.date_format_js || "dd/mm/yy",
         changeMonth: true,
         changeYear: true,
-        minDate: 0
+        minDate: 0,
       });
 
       $(".wbe-clear-date").on("click", function () {
@@ -520,7 +639,7 @@
       $list.html(
         '<div class="wbe-loading"><span class="spinner is-active"></span><span>' +
           wbe_admin_data.i18n.loading +
-          "</span></div>"
+          "</span></div>",
       );
       $loadBtn.prop("disabled", true);
 
@@ -540,11 +659,15 @@
 
             if (products.length === 0) {
               $list.html(
-                '<p style="padding: 20px; text-align: center; color: #646970;">Aucun produit trouvé dans cette catégorie.</p>'
+                '<p style="padding: 20px; text-align: center; color: #646970;">Aucun produit trouvé dans cette catégorie.</p>',
               );
             } else {
               self.displayProducts(products);
-              self.showToast("Succès", `${products.length} produit(s) chargé(s)`, "success");
+              self.showToast(
+                "Succès",
+                `${products.length} produit(s) chargé(s)`,
+                "success",
+              );
             }
           } else {
             const errorMsg =
@@ -581,14 +704,18 @@
       const $searchBtn = $("#wbe-search-btn");
 
       if (!searchTerm || searchTerm.trim().length < 2) {
-        self.showToast("Avertissement", "Veuillez entrer au moins 2 caractères", "warning");
+        self.showToast(
+          "Avertissement",
+          "Veuillez entrer au moins 2 caractères",
+          "warning",
+        );
         return;
       }
 
       $list.html(
         '<div class="wbe-loading"><span class="spinner is-active"></span><span>' +
           wbe_admin_data.i18n.loading +
-          "</span></div>"
+          "</span></div>",
       );
       $searchBtn.prop("disabled", true);
 
@@ -609,11 +736,15 @@
               $list.html(
                 '<p style="padding: 20px; text-align: center; color: #646970;">Aucun produit trouvé pour "' +
                   self.escapeHtml(searchTerm) +
-                  '"</p>'
+                  '"</p>',
               );
             } else {
               self.displayProducts(products);
-              self.showToast("Succès", `${products.length} produit(s) trouvé(s)`, "success");
+              self.showToast(
+                "Succès",
+                `${products.length} produit(s) trouvé(s)`,
+                "success",
+              );
             }
           } else {
             const errorMsg =
@@ -651,7 +782,7 @@
 
       if (!products || products.length === 0) {
         $list.html(
-          '<p style="padding: 20px; text-align: center; color: #646970;">Aucun produit trouvé.</p>'
+          '<p style="padding: 20px; text-align: center; color: #646970;">Aucun produit trouvé.</p>',
         );
         return;
       }
@@ -732,46 +863,61 @@
     updateReviewSummary: function (formData) {
       const $summary = $("#wbe-review-summary");
       let html = '<div class="wbe-review-content">';
-      
+
       html += `<div class="wbe-review-section"><strong>Produits sélectionnés :</strong> ${this.selectedProducts.length}</div>`;
-      
+
       // Vérifier si au moins une règle est définie
-      const hasRules = (formData.start_date && formData.end_date) || 
-                       formData.weekdays.length > 0 || 
-                       formData.specific.length > 0 || 
-                       formData.exclusions.length > 0;
-      
+      const hasRules =
+        (formData.start_date && formData.end_date) ||
+        formData.weekdays.length > 0 ||
+        formData.specific.length > 0 ||
+        formData.exclusions.length > 0;
+
       if (!hasRules) {
-        html += '<div class="wbe-review-section" style="padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; margin: 10px 0;">';
-        html += '<strong>⚠️ Aucune règle de disponibilité définie</strong><br>';
-        html += '<span style="font-size: 13px; color: #856404;">Les informations existantes des produits seront conservées.</span>';
-        html += '</div>';
+        html +=
+          '<div class="wbe-review-section" style="padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; margin: 10px 0;">';
+        html += "<strong>⚠️ Aucune règle de disponibilité définie</strong><br>";
+        html +=
+          '<span style="font-size: 13px; color: #856404;">Les informations existantes des produits seront conservées.</span>';
+        html += "</div>";
       } else {
         if (formData.start_date && formData.end_date) {
           const startFr = this.formatDateForDisplay(formData.start_date);
           const endFr = this.formatDateForDisplay(formData.end_date);
           html += `<div class="wbe-review-section"><strong>Période :</strong> ${startFr} au ${endFr}</div>`;
         }
-        
+
         if (formData.weekdays.length > 0) {
-          const dayNames = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+          const dayNames = [
+            "Dimanche",
+            "Lundi",
+            "Mardi",
+            "Mercredi",
+            "Jeudi",
+            "Vendredi",
+            "Samedi",
+          ];
           const selectedDays = formData.weekdays.map(function (dayIndex) {
             return dayNames[dayIndex];
           });
           html += `<div class="wbe-review-section"><strong>Jours disponibles :</strong> ${selectedDays.join(", ")}</div>`;
         }
-        
+
         if (formData.specific.length > 0) {
-          const formattedDates = formData.specific.map(date => this.formatDateForDisplay(date));
+          const formattedDates = formData.specific.map((date) =>
+            this.formatDateForDisplay(date),
+          );
           html += `<div class="wbe-review-section"><strong>Dates spécifiques (${formData.specific.length}) :</strong><br>${formattedDates.join(", ")}</div>`;
         }
-        
+
         if (formData.exclusions.length > 0) {
-          const formattedDates = formData.exclusions.map(date => this.formatDateForDisplay(date));
+          const formattedDates = formData.exclusions.map((date) =>
+            this.formatDateForDisplay(date),
+          );
           html += `<div class="wbe-review-section"><strong>Dates exclues (${formData.exclusions.length}) :</strong><br>${formattedDates.join(", ")}</div>`;
         }
       }
-      
+
       html += "</div>";
       $summary.html(html);
     },
@@ -785,9 +931,9 @@
         end_date: this.formData.end_date,
         weekdays: this.formData.weekdays,
         specific: this.formData.specific_dates,
-        exclusions: this.formData.exclusions
+        exclusions: this.formData.exclusions,
       };
-      
+
       this.updateReviewSummary(formData);
     },
 
@@ -795,7 +941,11 @@
      * Preview changes
      */
     previewChanges: function () {
-      this.showToast("Information", "Fonction de prévisualisation à venir...", "info");
+      this.showToast(
+        "Information",
+        "Fonction de prévisualisation à venir...",
+        "info",
+      );
     },
 
     /**
@@ -808,20 +958,38 @@
         this.showToast(
           "Erreur",
           "Aucun produit sélectionné. Veuillez sélectionner au moins un produit à l'étape 1.",
-          "error"
+          "error",
         );
         return;
       }
 
-      const formData = this.collectStep2Data();
+      // ✅ CORRECTION : Utiliser les variables globales specificDates et exclusionDates
+      const formData = {
+        start_date: this.formData.start_date,
+        end_date: this.formData.end_date,
+        weekdays: this.formData.weekdays,
+        specific: specificDates, // ✅ Variable globale
+        exclusions: exclusionDates, // ✅ Variable globale
+      };
+
+      console.group("🔍 DEBUG applyChanges");
+      console.log("selectedProducts:", this.selectedProducts);
+      console.log("formData:", formData);
+      console.log("specificDates (global):", specificDates);
+      console.log("exclusionDates (global):", exclusionDates);
+      console.groupEnd();
 
       const $applyBtn = $("#wbe-apply-btn");
       const $progressContainer = $("#wbe-progress-container");
       const $progressFill = $("#wbe-progress-fill");
       const $progressText = $("#wbe-progress-text");
+
+      // Préparer weekdays au format attendu par le serveur
       const weekdaysObj = {};
       $(".wbe-weekday-checkbox:checked").each(function () {
-        const dayName = $(this).attr("name").match(/\[(.*?)\]/)[1];
+        const dayName = $(this)
+          .attr("name")
+          .match(/\[(.*?)\]/)[1];
         weekdaysObj[dayName] = "on";
       });
 
@@ -838,29 +1006,36 @@
       const ajaxAction =
         wbe_admin_data.ajax_actions?.process_batch || "wbe_process_batch";
 
+      // ✅ CORRECTION : Envoyer les bonnes données
+      const ajaxData = {
+        action: ajaxAction,
+        nonce: wbe_admin_data.nonce,
+        product_ids: this.selectedProducts,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        weekdays: weekdaysObj,
+        specific: formData.specific, // ✅ Dates spécifiques depuis la variable globale
+        exclusions: formData.exclusions, // ✅ Dates d'exclusion depuis la variable globale
+        debug: true,
+        timestamp: Date.now(),
+      };
+
+      console.log("📤 Données envoyées au serveur:", ajaxData);
+
       $.ajax({
         url: wbe_admin_data.ajax_url,
         type: "POST",
-        data: {
-          action: ajaxAction,
-          nonce: wbe_admin_data.nonce,
-          product_ids: this.selectedProducts,
-          start_date: formData.start_date,
-          end_date: formData.end_date,
-          weekdays: weekdaysObj,
-          specific: formData.specific,
-          exclusions: formData.exclusions,
-          debug: true,
-          timestamp: Date.now(),
-        },
+        data: ajaxData,
         success: function (response) {
           clearInterval(updateTimer);
           const elapsed = Math.floor((Date.now() - startTime) / 1000);
 
+          console.log("📥 Réponse du serveur:", response);
+
           if (response.success) {
             $progressFill.css("width", "100%");
             $progressText.text(
-              `✅ Modifications appliquées avec succès en ${elapsed}s`
+              `✅ Modifications appliquées avec succès en ${elapsed}s`,
             );
 
             const results = response.data?.results;
@@ -1048,7 +1223,7 @@
       self.showToast(
         "Avertissement",
         `${failedProducts.length} produit(s) n'ont pas pu être mis à jour (${uniqueErrors} type(s) d'erreur)`,
-        "warning"
+        "warning",
       );
     },
 
@@ -1057,7 +1232,7 @@
      */
     showToast: function (title, message, type) {
       type = type || "info";
-      
+
       if (arguments.length === 2) {
         // Compatibilité avec l'ancienne signature
         message = title;
@@ -1108,10 +1283,12 @@
           icon +
           "</span>" +
           '<div style="flex: 1;">' +
-          (title ? '<strong>' + this.escapeHtml(title) + '</strong><br>' : '') +
-          '<span style="font-size: 14px;">' + this.escapeHtml(message) + "</span>" +
+          (title ? "<strong>" + this.escapeHtml(title) + "</strong><br>" : "") +
+          '<span style="font-size: 14px;">' +
+          this.escapeHtml(message) +
+          "</span>" +
           "</div>" +
-          '<button type="button" class="notice-dismiss" style="position: relative; right: 0;"><span class="screen-reader-text">Fermer</span></button>'
+          '<button type="button" class="notice-dismiss" style="position: relative; right: 0;"><span class="screen-reader-text">Fermer</span></button>',
       );
 
       $("#wbe-toast-container").append($toast);
@@ -1136,10 +1313,10 @@
     updateStats: function () {
       if (wbe_admin_data.statistics) {
         $("#wbe-total-products").text(
-          wbe_admin_data.statistics.total_products || 0
+          wbe_admin_data.statistics.total_products || 0,
         );
         $("#wbe-wootour-count").text(
-          wbe_admin_data.statistics.with_wootour || 0
+          wbe_admin_data.statistics.with_wootour || 0,
         );
       }
       this.updateSelectedCount();
@@ -1173,13 +1350,13 @@
         $select.append(
           $("<option></option>")
             .val(category.id)
-            .text(indent + categoryName + " (" + category.count + ")")
+            .text(indent + categoryName + " (" + category.count + ")"),
         );
         if (category.children && category.children.length > 0) {
           WBE_Admin.addCategoriesToSelect(
             $select,
             category.children,
-            level + 1
+            level + 1,
           );
         }
       });
@@ -1190,27 +1367,31 @@
      */
     convertDateToYMD: function (dateStr) {
       if (!dateStr) return "";
-      
+
       // Si déjà en YYYY-MM-DD
       if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
         return dateStr;
       }
-      
+
       // Si en DD/MM/YYYY, convertir
       if (dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)) {
         const parts = dateStr.split("/");
         return parts[2] + "-" + parts[1] + "-" + parts[0]; // YYYY-MM-DD
       }
-      
+
       // Si le datepicker a retourné une date différente
       const timestamp = Date.parse(dateStr);
       if (!isNaN(timestamp)) {
         const date = new Date(timestamp);
-        return date.getFullYear() + "-" + 
-               String(date.getMonth() + 1).padStart(2, '0') + "-" + 
-               String(date.getDate()).padStart(2, '0');
+        return (
+          date.getFullYear() +
+          "-" +
+          String(date.getMonth() + 1).padStart(2, "0") +
+          "-" +
+          String(date.getDate()).padStart(2, "0")
+        );
       }
-      
+
       return "";
     },
 

@@ -1,765 +1,839 @@
 <?php
+
 /**
- * Wootour Bulk Editor - Batch Operation Model
+ * Wootour Bulk Editor - Batch Processor Service (avec sauvegarde meta keys WooTour)
  * 
- * Represents a batch operation with state tracking,
- * progress monitoring, and resume capabilities.
+ * Handles batch processing of product availability updates
+ * with timeout protection, progress tracking, and resume capability.
+ * 
+ * ⭐ MODIFICATION : Sauvegarde maintenant dans les meta keys WooTour spécifiques
+ * - wt_customdate pour les dates spéciales
+ * - wt_disable_book pour les dates exclues
  * 
  * @package     WootourBulkEditor
- * @subpackage  Models
- 
+ * @subpackage  Services
+ * @author      Votre Nom <email@example.com>
  * @license     GPL-2.0+
  * @since       1.0.0
  */
 
-namespace WootourBulkEditor\Models;
+namespace WootourBulkEditor\Services;
 
 use WootourBulkEditor\Core\Constants;
+use WootourBulkEditor\Repositories\WootourRepository;
+use WootourBulkEditor\Repositories\ProductRepository;
+use WootourBulkEditor\Models\Product;
+use WootourBulkEditor\Exceptions\BatchException;
+use WootourBulkEditor\Traits\Singleton;
 
 // Exit if accessed directly
 defined('ABSPATH') || exit;
 
 /**
- * Class BatchOperation
+ * Class BatchProcessor
  * 
- * Value object representing a batch processing operation
- * with full state tracking for resume capabilities.
+ * Orchestrates batch updates with performance and reliability in mind.
+ * Implements the 50-products-per-batch limit for shared hosting.
  */
-final class BatchOperation
+final class BatchProcessor implements ServiceInterface
 {
-    /**
-     * Operation statuses
-     */
-    public const STATUS_PENDING = 'pending';
-    public const STATUS_PROCESSING = 'processing';
-    public const STATUS_COMPLETED = 'completed';
-    public const STATUS_FAILED = 'failed';
-    public const STATUS_CANCELLED = 'cancelled';
-    public const STATUS_PAUSED = 'paused';
+    use Singleton;
 
     /**
-     * Operation ID (unique identifier)
+     * @var WootourRepository
      */
-    private string $id;
+    private $wootour_repository;
 
     /**
-     * Operation status
+     * @var ProductRepository
      */
-    private string $status;
+    private $product_repository;
 
     /**
-     * Total number of products to process
+     * @var AvailabilityService
      */
-    private int $total_products;
+    private $availability_service;
 
     /**
-     * Number of successfully processed products
+     * @var LoggerService
      */
-    private int $processed_count;
+    private $logger_service;
 
     /**
-     * Number of failed products
+     * Private constructor
      */
-    private int $failed_count;
-
-    /**
-     * Array of processed product IDs
-     */
-    private array $processed_ids;
-
-    /**
-     * Array of failed products with error details
-     */
-    private array $failed_products;
-
-    /**
-     * Changes to apply to products
-     */
-    private array $changes;
-
-    /**
-     * User ID who initiated the operation
-     */
-    private int $user_id;
-
-    /**
-     * Start timestamp
-     */
-    private int $started_at;
-
-    /**
-     * Last update timestamp
-     */
-    private int $updated_at;
-
-    /**
-     * Completion timestamp
-     */
-    private int $completed_at;
-
-    /**
-     * Current batch number
-     */
-    private int $current_batch;
-
-    /**
-     * Total batches
-     */
-    private int $total_batches;
-
-    /**
-     * Operation metadata
-     */
-    private array $metadata;
-
-    /**
-     * Errors encountered during processing
-     */
-    private array $errors;
-
-    /**
-     * Warnings encountered during processing
-     */
-    private array $warnings;
-
-    /**
-     * Constructor
-     */
-    public function __construct(array $data = [])
+    private function __construct()
     {
-        $defaults = [
-            'id'                => $this->generateId(),
-            'status'            => self::STATUS_PENDING,
-            'total_products'    => 0,
-            'processed_count'   => 0,
-            'failed_count'      => 0,
-            'processed_ids'     => [],
-            'failed_products'   => [],
-            'changes'           => [],
-            'user_id'           => get_current_user_id(),
-            'started_at'        => time(),
-            'updated_at'        => time(),
-            'completed_at'      => 0,
-            'current_batch'     => 0,
-            'total_batches'     => 0,
-            'metadata'          => [],
-            'errors'            => [],
-            'warnings'          => [],
-        ];
-
-        $data = array_merge($defaults, $data);
-        $this->hydrate($data);
-        $this->validate();
+        // Dependencies injected via init
     }
 
     /**
-     * Hydrate the object from array data
+     * Initialize with dependencies
      */
-    private function hydrate(array $data): void
+    public function init(): void
     {
-        $this->id               = (string) $data['id'];
-        $this->status           = (string) $data['status'];
-        $this->total_products   = (int) $data['total_products'];
-        $this->processed_count  = (int) $data['processed_count'];
-        $this->failed_count     = (int) $data['failed_count'];
-        $this->processed_ids    = (array) $data['processed_ids'];
-        $this->failed_products  = (array) $data['failed_products'];
-        $this->changes          = (array) $data['changes'];
-        $this->user_id          = (int) $data['user_id'];
-        $this->started_at       = (int) $data['started_at'];
-        $this->updated_at       = (int) $data['updated_at'];
-        $this->completed_at     = (int) $data['completed_at'];
-        $this->current_batch    = (int) $data['current_batch'];
-        $this->total_batches    = (int) $data['total_batches'];
-        $this->metadata         = (array) $data['metadata'];
-        $this->errors           = (array) $data['errors'];
-        $this->warnings         = (array) $data['warnings'];
+        $this->wootour_repository = WootourRepository::getInstance();
+        $this->product_repository = ProductRepository::getInstance();
+        $this->availability_service = AvailabilityService::getInstance();
+        $this->logger_service = LoggerService::getInstance();
     }
 
     /**
-     * Validate the operation data
+     * Process batch update for multiple products
      * 
-     * @throws \InvalidArgumentException If data is invalid
+     * @param array $product_ids Array of product IDs to update
+     * @param array $changes Availability changes to apply
+     * @param string $operation_id Unique operation ID for tracking
+     * @return array Result with success count, errors, and progress
+     * @throws BatchException If batch processing fails
      */
-    public function validate(): void
+    public function processBatch(array $product_ids, array $changes, string $operation_id = ''): array
     {
-        // Validate ID
-        if (empty($this->id) || strlen($this->id) < 10) {
-            throw new \InvalidArgumentException('Invalid operation ID');
+        // Validate inputs
+        $this->validateBatchInput($product_ids, $changes);
+
+        // Generate operation ID if not provided
+        if (empty($operation_id)) {
+            $operation_id = $this->generateOperationId($product_ids, $changes);
         }
 
-        // Validate status
-        $valid_statuses = [
-            self::STATUS_PENDING,
-            self::STATUS_PROCESSING,
-            self::STATUS_COMPLETED,
-            self::STATUS_FAILED,
-            self::STATUS_CANCELLED,
-            self::STATUS_PAUSED,
-        ];
+        // Check if this is a resume operation
+        $resume_data = $this->getResumeData($operation_id);
+        $is_resume = !empty($resume_data);
 
-        if (!in_array($this->status, $valid_statuses, true)) {
-            throw new \InvalidArgumentException(sprintf(
-                'Invalid status: %s',
-                $this->status
-            ));
-        }
+        // Setup batch tracking
+        $batch_state = $this->initializeBatchState(
+            $product_ids,
+            $changes,
+            $operation_id,
+            $is_resume,
+            $resume_data
+        );
 
-        // Validate counts
-        if ($this->total_products < 0) {
-            throw new \InvalidArgumentException('Total products cannot be negative');
-        }
+        // Apply memory and time limits
+        $this->applyResourceLimits();
 
-        if ($this->processed_count < 0) {
-            throw new \InvalidArgumentException('Processed count cannot be negative');
-        }
+        try {
+            // Process in batches of 50 products
+            $result = $this->processInChunks($batch_state);
 
-        if ($this->failed_count < 0) {
-            throw new \InvalidArgumentException('Failed count cannot be negative');
-        }
+            // Clean up on complete success
+            if ($result['success_count'] === count($batch_state['all_product_ids'])) {
+                $this->cleanupOperation($operation_id);
+                $this->logBatchCompletion($operation_id, $result);
+            }
 
-        if ($this->processed_count + $this->failed_count > $this->total_products) {
-            throw new \InvalidArgumentException(
-                'Processed + failed cannot exceed total products'
+            return $result;
+        } catch (\Throwable $e) {
+            // Save state for resume
+            $this->saveResumeState($batch_state);
+
+            throw BatchException::processingFailed(
+                $operation_id,
+                $e->getMessage(),
+                $batch_state['processed_count'] ?? 0
             );
         }
+    }
 
-        // Validate timestamps
-        if ($this->started_at <= 0) {
-            throw new \InvalidArgumentException('Invalid start time');
+    /**
+     * Validate batch input parameters
+     */
+    private function validateBatchInput(array $product_ids, array $changes): void
+    {
+        if (empty($product_ids)) {
+            throw BatchException::emptyProductList();
         }
 
-        if ($this->updated_at < $this->started_at) {
-            throw new \InvalidArgumentException('Update time cannot be before start time');
+        if (empty($changes)) {
+            throw BatchException::emptyChanges();
         }
 
-        if ($this->completed_at > 0 && $this->completed_at < $this->started_at) {
-            throw new \InvalidArgumentException('Completion time cannot be before start time');
+        // Validate changes structure
+        try {
+            $this->availability_service->validateChanges($changes);
+        } catch (\Exception $e) {
+            throw BatchException::invalidChanges($e->getMessage());
         }
 
-        // Validate batches
-        if ($this->current_batch < 0) {
-            throw new \InvalidArgumentException('Current batch cannot be negative');
-        }
-
-        if ($this->total_batches < 0) {
-            throw new \InvalidArgumentException('Total batches cannot be negative');
-        }
-
-        if ($this->current_batch > $this->total_batches && $this->total_batches > 0) {
-            throw new \InvalidArgumentException('Current batch cannot exceed total batches');
+        // Limit total products to prevent memory issues
+        $max_products = apply_filters('wbe_max_batch_products', 1000);
+        if (count($product_ids) > $max_products) {
+            throw BatchException::tooManyProducts(count($product_ids), $max_products);
         }
     }
 
     /**
-     * Generate a unique operation ID
+     * Generate unique operation ID
      */
-    private function generateId(): string
+    private function generateOperationId(array $product_ids, array $changes): string
     {
-        return 'wbe_op_' . wp_generate_password(16, false) . '_' . time();
-    }
-
-    /**
-     * Convert to array
-     */
-    public function toArray(): array
-    {
-        return [
-            'id'                => $this->id,
-            'status'            => $this->status,
-            'total_products'    => $this->total_products,
-            'processed_count'   => $this->processed_count,
-            'failed_count'      => $this->failed_count,
-            'processed_ids'     => $this->processed_ids,
-            'failed_products'   => $this->failed_products,
-            'changes'           => $this->changes,
-            'user_id'           => $this->user_id,
-            'started_at'        => $this->started_at,
-            'updated_at'        => $this->updated_at,
-            'completed_at'      => $this->completed_at,
-            'current_batch'     => $this->current_batch,
-            'total_batches'     => $this->total_batches,
-            'metadata'          => $this->metadata,
-            'errors'            => $this->errors,
-            'warnings'          => $this->warnings,
+        $hash_data = [
+            'product_ids' => $product_ids,
+            'changes' => $changes,
+            'timestamp' => time(),
+            'user_id' => get_current_user_id(),
         ];
+
+        return 'wbe_op_' . md5(serialize($hash_data));
     }
 
     /**
-     * Convert to array for storage (minimal data)
+     * Get resume data for operation
      */
-    public function toStorageArray(): array
+    private function getResumeData(string $operation_id): array
     {
-        return [
-            'id'                => $this->id,
-            'status'            => $this->status,
-            'total_products'    => $this->total_products,
-            'processed_count'   => $this->processed_count,
-            'failed_count'      => $this->failed_count,
-            'processed_ids'     => $this->processed_ids,
-            'failed_products'   => $this->failed_products,
-            'changes'           => $this->changes,
-            'user_id'           => $this->user_id,
-            'started_at'        => $this->started_at,
-            'updated_at'        => $this->updated_at,
-            'completed_at'      => $this->completed_at,
-            'current_batch'     => $this->current_batch,
-        ];
-    }
+        $data = get_transient('wbe_resume_' . $operation_id);
 
-    /**
-     * Convert to array for API response
-     */
-    public function toApiArray(): array
-    {
-        $progress = $this->getProgressPercentage();
-        
-        return [
-            'id'                => $this->id,
-            'status'            => $this->status,
-            'progress'          => $progress,
-            'total_products'    => $this->total_products,
-            'processed_count'   => $this->processed_count,
-            'failed_count'      => $this->failed_count,
-            'remaining_count'   => $this->getRemainingCount(),
-            'user_id'           => $this->user_id,
-            'started_at'        => $this->formatTimestamp($this->started_at),
-            'updated_at'        => $this->formatTimestamp($this->updated_at),
-            'completed_at'      => $this->completed_at ? $this->formatTimestamp($this->completed_at) : null,
-            'duration'          => $this->getDuration(),
-            'estimated_remaining' => $this->estimateRemainingTime(),
-            'current_batch'     => $this->current_batch,
-            'total_batches'     => $this->total_batches,
-            'can_resume'        => $this->canResume(),
-            'has_errors'        => !empty($this->errors),
-            'has_warnings'      => !empty($this->warnings),
-            'error_count'       => count($this->errors),
-            'warning_count'     => count($this->warnings),
-        ];
-    }
-
-    /**
-     * Start the operation
-     */
-    public function start(int $total_products, array $changes): self
-    {
-        $clone = clone $this;
-        
-        $clone->status = self::STATUS_PROCESSING;
-        $clone->total_products = $total_products;
-        $clone->changes = $changes;
-        $clone->started_at = time();
-        $clone->updated_at = time();
-        $clone->total_batches = (int) ceil($total_products / Constants::BATCH_SIZE);
-        
-        $clone->validate();
-        return $clone;
-    }
-
-    /**
-     * Update progress
-     */
-    public function updateProgress(
-        int $processed_count,
-        int $failed_count,
-        array $processed_ids = [],
-        array $failed_products = [],
-        int $current_batch = 0
-    ): self {
-        $clone = clone $this;
-        
-        $clone->processed_count = $processed_count;
-        $clone->failed_count = $failed_count;
-        $clone->processed_ids = array_merge($clone->processed_ids, $processed_ids);
-        $clone->failed_products = array_merge($clone->failed_products, $failed_products);
-        $clone->current_batch = $current_batch;
-        $clone->updated_at = time();
-        
-        // Auto-update status if complete
-        if ($clone->isComplete()) {
-            $clone->status = self::STATUS_COMPLETED;
-            $clone->completed_at = time();
+        if ($data && is_array($data)) {
+            // Validate resume data is still valid
+            if ($this->validateResumeData($data)) {
+                return $data;
+            }
         }
-        
-        $clone->validate();
-        return $clone;
+
+        return [];
     }
 
     /**
-     * Add an error
+     * Validate resume data integrity
      */
-    public function addError(string $error, array $context = []): self
+    private function validateResumeData(array $data): bool
     {
-        $clone = clone $this;
-        
-        $clone->errors[] = [
-            'message'   => $error,
-            'context'   => $context,
+        $required_keys = [
+            'operation_id',
+            'all_product_ids',
+            'changes',
+            'processed_ids',
+            'failed_ids',
+            'started_at',
+        ];
+
+        foreach ($required_keys as $key) {
+            if (!array_key_exists($key, $data)) {
+                return false;
+            }
+        }
+
+        // Check if operation is too old (24h max)
+        if (time() - $data['started_at'] > DAY_IN_SECONDS) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Initialize batch state
+     */
+    private function initializeBatchState(
+        array $product_ids,
+        array $changes,
+        string $operation_id,
+        bool $is_resume,
+        array $resume_data
+    ): array {
+        if ($is_resume) {
+            // Resume from saved state
+            $state = $resume_data;
+            $state['is_resume'] = true;
+            $state['resumed_at'] = time();
+
+            $this->logResumeOperation($operation_id, $state);
+        } else {
+            // New operation
+            $state = [
+                'operation_id'      => $operation_id,
+                'all_product_ids'   => $this->product_repository->validateProductIds($product_ids),
+                'changes'          => $changes,
+                'processed_ids'    => [],
+                'failed_ids'       => [],
+                'errors'           => [],
+                'warnings'         => [],
+                'started_at'       => time(),
+                'is_resume'        => false,
+                'processed_count'  => 0,
+                'current_batch'    => 0,
+            ];
+
+            $this->logStartOperation($operation_id, $state);
+        }
+
+        // Calculate remaining products
+        $state['remaining_ids'] = array_diff(
+            $state['all_product_ids'],
+            $state['processed_ids'],
+            array_keys($state['failed_ids'])
+        );
+
+        // Save initial state
+        $this->saveBatchState($state);
+
+        return $state;
+    }
+
+    /**
+     * Apply resource limits for shared hosting
+     */
+    private function applyResourceLimits(): void
+    {
+        // Increase time limit
+        set_time_limit(Constants::TIMEOUT_SECONDS);
+
+        // Increase memory limit
+        if (wp_convert_hr_to_bytes(Constants::MEMORY_LIMIT) > wp_convert_hr_to_bytes(ini_get('memory_limit'))) {
+            @ini_set('memory_limit', Constants::MEMORY_LIMIT);
+        }
+
+        // Disable WordPress heartbeats during processing
+        add_filter('heartbeat_settings', function ($settings) {
+            $settings['interval'] = 120; // Slow down heartbeats
+            return $settings;
+        });
+    }
+
+    /**
+     * Process products in chunks of 50
+     */
+    private function processInChunks(array &$state): array
+    {
+        $start_time = time();
+        $chunk_size = Constants::BATCH_SIZE;
+
+        // Process remaining products in chunks
+        while (!empty($state['remaining_ids'])) {
+            // Check timeout
+            if (time() - $start_time >= Constants::TIMEOUT_SECONDS - 5) {
+                $this->saveResumeState($state);
+                throw BatchException::timeoutExceeded(Constants::TIMEOUT_SECONDS);
+            }
+
+            // Get next chunk
+            $chunk_ids = array_slice($state['remaining_ids'], 0, $chunk_size);
+
+            // Process chunk
+            $chunk_result = $this->processChunk($chunk_ids, $state['changes']);
+
+            // Update state
+            $state['current_batch']++;
+            $state['processed_ids'] = array_merge($state['processed_ids'], $chunk_result['processed_ids']);
+            $state['failed_ids'] = array_merge($state['failed_ids'], $chunk_result['failed_ids']);
+            $state['errors'] = array_merge($state['errors'], $chunk_result['errors']);
+            $state['warnings'] = array_merge($state['warnings'], $chunk_result['warnings']);
+
+            // Recalculate remaining
+            $state['remaining_ids'] = array_diff(
+                $state['all_product_ids'],
+                $state['processed_ids'],
+                array_keys($state['failed_ids'])
+            );
+
+            $state['processed_count'] = count($state['processed_ids']);
+
+            // Save progress
+            $this->saveBatchState($state);
+
+            // Log chunk completion
+            $this->logChunkCompletion($state['operation_id'], $state['current_batch'], $chunk_result);
+
+            // If we have warnings or errors, add small delay to prevent server overload
+            if (!empty($chunk_result['errors']) || !empty($chunk_result['warnings'])) {
+                usleep(100000); // 0.1 second delay
+            }
+        }
+
+        // Compile final result
+        return $this->compileResult($state);
+    }
+
+    /**
+     * Process a single chunk of products
+     */
+    private function processChunk(array $product_ids, array $changes): array
+    {
+        $result = [
+            'processed_ids' => [],
+            'failed_ids'    => [],
+            'errors'        => [],
+            'warnings'      => [],
+        ];
+
+        // Get products for this chunk
+        $products = $this->product_repository->getProductsByIds($product_ids);
+
+        foreach ($products as $product) {
+            try {
+                $this->processSingleProduct($product, $changes);
+                $result['processed_ids'][] = $product->getId();
+            } catch (\Exception $e) {
+                $error_id = $product->getId();
+                $result['failed_ids'][$error_id] = [
+                    'product_id' => $error_id,
+                    'product_name' => $product->getName(),
+                    'error' => $e->getMessage(),
+                    'code' => $e->getCode(),
+                ];
+                $result['errors'][] = sprintf(
+                    'Product #%d "%s": %s',
+                    $error_id,
+                    $product->getName(),
+                    $e->getMessage()
+                );
+            }
+        }
+
+        // Handle missing products (deleted during processing)
+        $processed_ids = array_map(fn($p) => $p->getId(), $products);
+        $missing_ids = array_diff($product_ids, $processed_ids);
+
+        foreach ($missing_ids as $missing_id) {
+            $result['failed_ids'][$missing_id] = [
+                'product_id' => $missing_id,
+                'product_name' => 'Unknown product (may have been deleted)',
+                'error' => 'Product not found',
+                'code' => 404,
+            ];
+            $result['errors'][] = sprintf('Product #%d not found', $missing_id);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Process a single product with changes
+     * 
+     * ⭐ MODIFIÉ : Sauvegarde maintenant dans les meta keys WooTour spécifiques
+     */
+    private function processSingleProduct(Product $product, array $changes): void
+    {
+        $product_id = $product->getId();
+
+        error_log('[WBE BatchProcessor] Processing product #' . $product_id . ': ' . $product->getName());
+
+        try {
+            // Check if product still exists and is valid
+            if (!$this->product_repository->isValidProduct($product_id)) {
+                throw new \Exception('Product no longer exists or is invalid');
+            }
+
+            // Get existing availability
+            $existing_availability = $this->wootour_repository->getAvailability($product_id);
+
+            error_log('[WBE BatchProcessor] Existing availability: ' . print_r($existing_availability->toArray(), true));
+
+            //  CORRECTION : Utiliser withProductId() au lieu de setProductId()
+            if (method_exists($existing_availability, 'withProductId')) {
+                $existing_availability = $existing_availability->withProductId($product_id);
+            }
+
+            // Check if changes will actually modify anything
+            if (!$this->availability_service->hasEffectiveChanges($existing_availability, $changes)) {
+                error_log('[WBE BatchProcessor] Product #' . $product_id . ' skipped - no effective changes');
+                return;
+            }
+
+            // Calculate conflicts/warnings
+            $conflicts = $this->availability_service->calculateConflicts($existing_availability, $changes);
+
+            // Merge changes
+            $merged_availability = $this->availability_service->mergeChanges($existing_availability, $changes);
+
+            //  CORRECTION : S'assurer que l'ID du produit est défini
+            if (method_exists($merged_availability, 'withProductId')) {
+                $merged_availability = $merged_availability->withProductId($product_id);
+            }
+
+            error_log('[WBE BatchProcessor] Merged availability: ' . print_r($merged_availability->toArray(), true));
+
+            // Save to Wootour - META KEY PRINCIPALE
+            $save_result = $this->wootour_repository->updateAvailability($product_id, $merged_availability->toArray());
+
+            if (!$save_result) {
+                throw new \Exception('Failed to save availability data');
+            }
+
+            // ⭐ NOUVEAU : Sauvegarder aussi dans les meta keys WooTour spécifiques
+            $this->save_to_wootour_meta_keys($product_id, $merged_availability->toArray());
+
+            error_log('[WBE BatchProcessor] Product #' . $product_id . ' successfully updated');
+
+            // Log success
+            $this->logger_service->logProductUpdated(
+                $product_id,
+                $existing_availability->toArray(),
+                $merged_availability->toArray(),
+                $changes,
+                $conflicts
+            );
+
+            // Clear relevant caches
+            $this->product_repository->clearCache($product_id);
+        } catch (\Exception $e) {
+            error_log('[WBE BatchProcessor] ERROR processing product #' . $product_id . ': ' . $e->getMessage());
+            // Log failure
+            $this->logger_service->logProductFailed($product_id, $changes, $e->getMessage());
+            throw $e; // Re-throw for chunk processing
+        }
+    }
+
+    /**
+     * ⭐ NOUVELLE MÉTHODE : Sauvegarder dans les meta keys WooTour spécifiques
+     * 
+     * Cette méthode sauvegarde les dates dans les meta keys que WooTour utilise
+     * nativement dans son interface de fiche produit.
+     * 
+     * @param int $product_id ID du produit
+     * @param array $availability Données de disponibilité
+     */
+    private function save_to_wootour_meta_keys(int $product_id, array $availability): void
+    {
+        error_log('[WBE BatchProcessor] Saving to WooTour meta keys for product #' . $product_id);
+
+        // 1. Sauvegarder les dates spécifiques dans wt_customdate
+        if (!empty($availability['specific']) && is_array($availability['specific'])) {
+            $specific_dates = $availability['specific'];
+            
+            // WooTour peut accepter différents formats, on utilise un array simple de dates
+            update_post_meta($product_id, 'wt_customdate', $specific_dates);
+            
+            error_log('[WBE BatchProcessor] Saved ' . count($specific_dates) . ' dates to wt_customdate');
+        } else {
+            // Si pas de dates spécifiques, supprimer la meta
+            delete_post_meta($product_id, 'wt_customdate');
+            error_log('[WBE BatchProcessor] Cleared wt_customdate (no specific dates)');
+        }
+
+        // 2. Sauvegarder les exclusions dans wt_disable_book
+        if (!empty($availability['exclusions']) && is_array($availability['exclusions'])) {
+            $exclusion_dates = $availability['exclusions'];
+            
+            // Sauvegarder dans wt_disable_book (meta key principale pour les exclusions)
+            update_post_meta($product_id, 'wt_disable_book', $exclusion_dates);
+            
+            error_log('[WBE BatchProcessor] Saved ' . count($exclusion_dates) . ' dates to wt_disable_book');
+            
+            // Note: On pourrait aussi sauvegarder dans wt_disabledate si WooTour l'utilise
+            // Mais généralement wt_disable_book suffit
+        } else {
+            // Si pas d'exclusions, supprimer les metas
+            delete_post_meta($product_id, 'wt_disable_book');
+            delete_post_meta($product_id, 'wt_disabledate');
+            error_log('[WBE BatchProcessor] Cleared exclusion metas (no exclusions)');
+        }
+
+        error_log('[WBE BatchProcessor] WooTour meta keys updated successfully');
+    }
+
+    /**
+     * Save batch state for resume capability
+     */
+    private function saveBatchState(array $state): void
+    {
+        // Keep only essential data for resume
+        $resume_data = [
+            'operation_id'      => $state['operation_id'],
+            'all_product_ids'   => $state['all_product_ids'],
+            'changes'          => $state['changes'],
+            'processed_ids'    => $state['processed_ids'],
+            'failed_ids'       => $state['failed_ids'],
+            'started_at'       => $state['started_at'],
+            'last_updated'     => time(),
+        ];
+
+        // Save with 1-hour expiry (enough time to resume)
+        set_transient('wbe_resume_' . $state['operation_id'], $resume_data, HOUR_IN_SECONDS);
+
+        // Also save progress for UI
+        $progress = $this->calculateProgress($state);
+        set_transient('wbe_progress_' . $state['operation_id'], $progress, 10 * MINUTE_IN_SECONDS);
+    }
+
+    /**
+     * Save resume state (when interrupted)
+     */
+    private function saveResumeState(array $state): void
+    {
+        $this->saveBatchState($state);
+
+        // Log interruption
+        $this->logger_service->logBatchInterrupted(
+            $state['operation_id'],
+            $state['processed_count'],
+            count($state['all_product_ids'])
+        );
+    }
+
+    /**
+     * Calculate progress percentage
+     */
+    private function calculateProgress(array $state): array
+    {
+        $total = count($state['all_product_ids']);
+        $processed = count($state['processed_ids']);
+        $failed = count($state['failed_ids']);
+
+        return [
+            'total' => $total,
+            'processed' => $processed,
+            'failed' => $failed,
+            'remaining' => $total - $processed - $failed,
+            'percentage' => $total > 0 ? round(($processed + $failed) / $total * 100, 1) : 0,
+            'current_batch' => $state['current_batch'],
+            'estimated_remaining' => $this->estimateRemainingTime($state),
             'timestamp' => time(),
         ];
-        
-        $clone->updated_at = time();
-        return $clone;
-    }
-
-    /**
-     * Add a warning
-     */
-    public function addWarning(string $warning, array $context = []): self
-    {
-        $clone = clone $this;
-        
-        $clone->warnings[] = [
-            'message'   => $warning,
-            'context'   => $context,
-            'timestamp' => time(),
-        ];
-        
-        $clone->updated_at = time();
-        return $clone;
-    }
-
-    /**
-     * Mark as completed
-     */
-    public function complete(): self
-    {
-        $clone = clone $this;
-        
-        $clone->status = self::STATUS_COMPLETED;
-        $clone->completed_at = time();
-        $clone->updated_at = time();
-        
-        // Ensure counts are consistent
-        if ($clone->processed_count + $clone->failed_count < $clone->total_products) {
-            $clone->processed_count = $clone->total_products - $clone->failed_count;
-        }
-        
-        $clone->validate();
-        return $clone;
-    }
-
-    /**
-     * Mark as failed
-     */
-    public function fail(string $reason = ''): self
-    {
-        $clone = clone $this;
-        
-        $clone->status = self::STATUS_FAILED;
-        $clone->completed_at = time();
-        $clone->updated_at = time();
-        
-        if (!empty($reason)) {
-            $clone->addError($reason);
-        }
-        
-        $clone->validate();
-        return $clone;
-    }
-
-    /**
-     * Mark as cancelled
-     */
-    public function cancel(): self
-    {
-        $clone = clone $this;
-        
-        $clone->status = self::STATUS_CANCELLED;
-        $clone->completed_at = time();
-        $clone->updated_at = time();
-        
-        $clone->validate();
-        return $clone;
-    }
-
-    /**
-     * Pause the operation
-     */
-    public function pause(): self
-    {
-        $clone = clone $this;
-        
-        $clone->status = self::STATUS_PAUSED;
-        $clone->updated_at = time();
-        
-        $clone->validate();
-        return $clone;
-    }
-
-    /**
-     * Resume the operation
-     */
-    public function resume(): self
-    {
-        $clone = clone $this;
-        
-        $clone->status = self::STATUS_PROCESSING;
-        $clone->updated_at = time();
-        
-        $clone->validate();
-        return $clone;
-    }
-
-    /**
-     * Check if operation is complete
-     */
-    public function isComplete(): bool
-    {
-        return $this->processed_count + $this->failed_count >= $this->total_products;
-    }
-
-    /**
-     * Check if operation can be resumed
-     */
-    public function canResume(): bool
-    {
-        $resumable_statuses = [
-            self::STATUS_PAUSED,
-            self::STATUS_FAILED,
-        ];
-        
-        return in_array($this->status, $resumable_statuses, true) && 
-               !$this->isComplete();
-    }
-
-    /**
-     * Check if operation is in progress
-     */
-    public function isInProgress(): bool
-    {
-        return $this->status === self::STATUS_PROCESSING;
-    }
-
-    /**
-     * Get progress percentage
-     */
-    public function getProgressPercentage(): float
-    {
-        if ($this->total_products === 0) {
-            return 0.0;
-        }
-        
-        $total_processed = $this->processed_count + $this->failed_count;
-        return min(100.0, ($total_processed / $this->total_products) * 100.0);
-    }
-
-    /**
-     * Get remaining product count
-     */
-    public function getRemainingCount(): int
-    {
-        $total_processed = $this->processed_count + $this->failed_count;
-        return max(0, $this->total_products - $total_processed);
-    }
-
-    /**
-     * Get processing duration in seconds
-     */
-    public function getDuration(): int
-    {
-        $end_time = $this->completed_at ?: time();
-        return max(0, $end_time - $this->started_at);
     }
 
     /**
      * Estimate remaining processing time
      */
-    public function estimateRemainingTime(): ?int
+    private function estimateRemainingTime(array $state): int
     {
-        if ($this->processed_count === 0 || $this->getDuration() === 0) {
-            return null;
+        $processed = count($state['processed_ids']) + count($state['failed_ids']);
+        $remaining = count($state['remaining_ids']);
+
+        if ($processed === 0 || $remaining === 0) {
+            return 0;
         }
-        
-        $time_per_product = $this->getDuration() / $this->processed_count;
-        $remaining = $this->getRemainingCount();
-        
+
+        $elapsed = time() - $state['started_at'];
+        $time_per_product = $elapsed / $processed;
+
         return (int) round($time_per_product * $remaining);
     }
 
     /**
-     * Get failed products summary
+     * Compile final result from state
      */
-    public function getFailedSummary(): array
+    private function compileResult(array $state): array
     {
-        $summary = [];
-        
-        foreach ($this->failed_products as $failed) {
-            if (is_array($failed)) {
-                $summary[] = [
-                    'product_id'   => $failed['product_id'] ?? 0,
-                    'product_name' => $failed['product_name'] ?? 'Unknown',
-                    'error'        => $failed['error'] ?? 'Unknown error',
-                ];
-            }
-        }
-        
-        return $summary;
-    }
+        $total = count($state['all_product_ids']);
+        $processed = count($state['processed_ids']);
+        $failed = count($state['failed_ids']);
 
-    /**
-     * Get operation statistics
-     */
-    public function getStatistics(): array
-    {
         return [
-            'success_rate' => $this->total_products > 0 ? 
-                ($this->processed_count / $this->total_products) * 100 : 0,
-            'failure_rate' => $this->total_products > 0 ? 
-                ($this->failed_count / $this->total_products) * 100 : 0,
-            'products_per_second' => $this->getDuration() > 0 ?
-                $this->processed_count / $this->getDuration() : 0,
-            'batches_completed' => $this->current_batch,
-            'batches_remaining' => max(0, $this->total_batches - $this->current_batch),
+            'operation_id'    => $state['operation_id'],
+            'total_products'  => $total,
+            'success_count'   => $processed,
+            'failed_count'    => $failed,
+            'errors'          => $state['errors'],
+            'warnings'        => $state['warnings'],
+            'failed_details'  => $state['failed_ids'],
+            'is_complete'     => empty($state['remaining_ids']),
+            'is_resume'       => $state['is_resume'] ?? false,
+            'processing_time' => time() - $state['started_at'],
+            'batch_count'     => $state['current_batch'],
         ];
     }
 
     /**
-     * Check if operation is expired
+     * Clean up operation data
      */
-    public function isExpired(int $ttl = 86400): bool
+    private function cleanupOperation(string $operation_id): void
     {
-        // Default TTL: 24 hours
-        return (time() - $this->updated_at) > $ttl;
+        delete_transient('wbe_resume_' . $operation_id);
+        delete_transient('wbe_progress_' . $operation_id);
     }
 
     /**
-     * Format timestamp for display
+     * Get progress for an operation
+     * 
+     * @param string $operation_id Operation ID
+     * @return array|null Progress data or null if not found
      */
-    private function formatTimestamp(int $timestamp): string
+    public function getProgress(string $operation_id): ?array
     {
-        return date('Y-m-d H:i:s', $timestamp);
-    }
+        $progress = get_transient('wbe_progress_' . $operation_id);
 
-    /**
-     * Getters
-     */
-    public function getId(): string
-    {
-        return $this->id;
-    }
-
-    public function getStatus(): string
-    {
-        return $this->status;
-    }
-
-    public function getTotalProducts(): int
-    {
-        return $this->total_products;
-    }
-
-    public function getProcessedCount(): int
-    {
-        return $this->processed_count;
-    }
-
-    public function getFailedCount(): int
-    {
-        return $this->failed_count;
-    }
-
-    public function getProcessedIds(): array
-    {
-        return $this->processed_ids;
-    }
-
-    public function getFailedProducts(): array
-    {
-        return $this->failed_products;
-    }
-
-    public function getChanges(): array
-    {
-        return $this->changes;
-    }
-
-    public function getUserId(): int
-    {
-        return $this->user_id;
-    }
-
-    public function getStartedAt(): int
-    {
-        return $this->started_at;
-    }
-
-    public function getUpdatedAt(): int
-    {
-        return $this->updated_at;
-    }
-
-    public function getCompletedAt(): int
-    {
-        return $this->completed_at;
-    }
-
-    public function getCurrentBatch(): int
-    {
-        return $this->current_batch;
-    }
-
-    public function getTotalBatches(): int
-    {
-        return $this->total_batches;
-    }
-
-    public function getMetadata(): array
-    {
-        return $this->metadata;
-    }
-
-    public function getErrors(): array
-    {
-        return $this->errors;
-    }
-
-    public function getWarnings(): array
-    {
-        return $this->warnings;
-    }
-
-    /**
-     * Magic getter for backward compatibility
-     */
-    public function __get(string $name)
-    {
-        $method = 'get' . str_replace('_', '', ucwords($name, '_'));
-        
-        if (method_exists($this, $method)) {
-            return $this->$method();
+        if ($progress && is_array($progress)) {
+            $resume_data = get_transient('wbe_resume_' . $operation_id);
+            $progress['can_resume'] = !empty($resume_data);
+            $progress['operation_id'] = $operation_id;
+            return $progress;
         }
-        
-        trigger_error(
-            sprintf('Undefined property: %s::$%s', __CLASS__, $name),
-            E_USER_NOTICE
-        );
-        
+
         return null;
     }
 
     /**
-     * Prevent setting properties directly
+     * Resume a failed or interrupted operation
+     * 
+     * @param string $operation_id Operation ID to resume
+     * @return array Result with success count, errors, and progress
+     * @throws BatchException If operation cannot be resumed
      */
-    public function __set(string $name, $value)
+    public function resumeOperation(string $operation_id): array
     {
-        throw new \LogicException(
-            sprintf('%s is immutable. Use with*() methods instead.', __CLASS__)
+        $resume_data = $this->getResumeData($operation_id);
+
+        if (empty($resume_data)) {
+            throw BatchException::cannotResume($operation_id);
+        }
+
+        // Check if operation is already complete
+        $remaining = array_diff(
+            $resume_data['all_product_ids'],
+            $resume_data['processed_ids'],
+            array_keys($resume_data['failed_ids'])
+        );
+
+        if (empty($remaining)) {
+            throw BatchException::alreadyCompleted($operation_id);
+        }
+
+        // Resume processing
+        return $this->processBatch([], [], $operation_id);
+    }
+
+    /**
+     * Cancel an operation
+     * 
+     * @param string $operation_id Operation ID to cancel
+     * @return bool True if cancelled
+     */
+    public function cancelOperation(string $operation_id): bool
+    {
+        $this->cleanupOperation($operation_id);
+        $this->logger_service->logBatchCancelled($operation_id);
+
+        return true;
+    }
+
+    /**
+     * Preview changes without applying them
+     * 
+     * @param array $product_ids Product IDs to preview
+     * @param array $changes Changes to preview
+     * @param int $sample_size Maximum number of products to sample
+     * @return array Preview results with conflicts and warnings
+     */
+    public function previewChanges(array $product_ids, array $changes, int $sample_size = 10): array
+    {
+        if (empty($product_ids) || empty($changes)) {
+            return ['samples' => [], 'summary' => []];
+        }
+
+        // Take a sample of products
+        $sample_ids = array_slice($product_ids, 0, min($sample_size, count($product_ids)));
+        $products = $this->product_repository->getProductsByIds($sample_ids);
+
+        $preview_results = [];
+        $total_conflicts = 0;
+        $total_warnings = 0;
+
+        foreach ($products as $product) {
+            try {
+                $existing = $this->wootour_repository->getAvailability($product->getId());
+                $conflicts = $this->availability_service->calculateConflicts($existing, $changes);
+
+                $preview_results[] = [
+                    'product_id'   => $product->getId(),
+                    'product_name' => $product->getName(),
+                    'has_wootour'  => $product->hasWootour(),
+                    'existing'     => $this->availability_service->formatForDisplay($existing),
+                    'conflicts'    => $conflicts,
+                    'preview'      => $this->availability_service->calculatePreview(
+                        $existing,
+                        $changes,
+                        date('Y-m-d'),
+                        date('Y-m-d', strtotime('+30 days'))
+                    ),
+                ];
+
+                foreach ($conflicts as $conflict) {
+                    if ($conflict['type'] === 'error') {
+                        $total_conflicts++;
+                    } else {
+                        $total_warnings++;
+                    }
+                }
+            } catch (\Exception $e) {
+                $preview_results[] = [
+                    'product_id'   => $product->getId(),
+                    'product_name' => $product->getName(),
+                    'error'        => $e->getMessage(),
+                ];
+            }
+        }
+
+        return [
+            'samples' => $preview_results,
+            'summary' => [
+                'sample_size'   => count($sample_ids),
+                'total_products' => count($product_ids),
+                'total_conflicts' => $total_conflicts,
+                'total_warnings' => $total_warnings,
+                'has_errors'    => $total_conflicts > 0,
+            ],
+        ];
+    }
+
+    /**
+     * Logging methods
+     */
+    private function logStartOperation(string $operation_id, array $state): void
+    {
+        $this->logger_service->logBatchStarted(
+            $operation_id,
+            count($state['all_product_ids']),
+            $state['changes'],
+            get_current_user_id()
+        );
+    }
+
+    private function logResumeOperation(string $operation_id, array $state): void
+    {
+        $this->logger_service->logBatchResumed(
+            $operation_id,
+            count($state['all_product_ids']),
+            count($state['processed_ids'])
+        );
+    }
+
+    private function logChunkCompletion(string $operation_id, int $batch_number, array $chunk_result): void
+    {
+        $this->logger_service->logBatchChunk(
+            $operation_id,
+            $batch_number,
+            count($chunk_result['processed_ids']),
+            count($chunk_result['failed_ids'])
+        );
+    }
+
+    private function logBatchCompletion(string $operation_id, array $result): void
+    {
+        $this->logger_service->logBatchCompleted(
+            $operation_id,
+            $result['success_count'],
+            $result['failed_count'],
+            $result['processing_time']
         );
     }
 
     /**
-     * String representation
+     * Get batch statistics
      */
-    public function __toString(): string
+    public function getStatistics(): array
     {
-        return sprintf(
-            'Operation %s: %s (%d/%d products, %d%%)',
-            substr($this->id, 0, 8),
-            $this->status,
-            $this->processed_count + $this->failed_count,
-            $this->total_products,
-            $this->getProgressPercentage()
-        );
+        return [
+            'max_batch_size' => Constants::BATCH_SIZE,
+            'timeout_seconds' => Constants::TIMEOUT_SECONDS,
+            'memory_limit' => Constants::MEMORY_LIMIT,
+            'max_total_products' => apply_filters('wbe_max_batch_products', 1000),
+            'performance' => $this->estimatePerformance(),
+        ];
+    }
+
+    /**
+     * Estimate processing performance
+     */
+    private function estimatePerformance(): array
+    {
+        // This would ideally track actual performance over time
+        return [
+            'estimated_products_per_second' => 5, // Conservative estimate
+            'estimated_batch_time' => ceil(Constants::BATCH_SIZE / 5),
+            'recommended_max' => Constants::TIMEOUT_SECONDS * 3, // 3x timeout buffer
+        ];
     }
 }
