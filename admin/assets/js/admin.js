@@ -1,5 +1,6 @@
 /**
  * Wootour Bulk Editor - Admin JavaScript (Enhanced - Validation Simplifiée)
+ * VERSION MODIFIÉE : Suppression des restrictions sur les dates passées
  */
 (function ($) {
   "use strict";
@@ -47,15 +48,15 @@
     setupDateManagement: function () {
       const self = this;
 
-      // Initialiser les datepickers pour l'ajout
+      // Initialiser les datepickers pour l'ajout - PLUS DE minDate
       $("#wbe-add-specific-date").datepicker({
         dateFormat: wbe_admin_data.date_format_js || "dd/mm/yy",
-        minDate: 0,
+        // PLUS DE RESTRICTION : minDate retiré pour permettre les dates passées
       });
 
       $("#wbe-add-exclusion-date").datepicker({
         dateFormat: wbe_admin_data.date_format_js || "dd/mm/yy",
-        minDate: 0,
+        // PLUS DE RESTRICTION : minDate retiré pour permettre les dates passées
       });
 
       // Ajouter une date spécifique
@@ -354,86 +355,59 @@
     },
 
     /**
-     * Collecter les données de l'étape 2
+     * Collecter les données de l'étape 2 - VERSION CORRIGÉE
      */
-    /**
- * CORRECTIF pour admin.js - Section collectStep2Data()
- * 
- * PROBLÈME IDENTIFIÉ :
- * La fonction collectStep2Data() doit utiliser les variables globales 
- * specificDates et exclusionDates au lieu de tenter de les parser depuis le DOM
- */
-
-// ========================================
-// SECTION À REMPLACER dans admin.js
-// Ligne ~360 environ
-// ========================================
-
-/**
- * Collecter les données de l'étape 2 - VERSION CORRIGÉE
- */
-collectStep2Data: function () {
-  // ✅ CORRECTION : Utiliser directement les variables globales
-  const formData = {
-    start_date: this.convertDateToYMD($("#wbe-start-date").val()) || "",
-    end_date: this.convertDateToYMD($("#wbe-end-date").val()) || "",
-    weekdays: [],
-    specific: specificDates,      // ✅ Variable globale définie en haut du fichier
-    exclusions: exclusionDates    // ✅ Variable globale définie en haut du fichier
-  };
-  
-  // Récupérer les jours de la semaine cochés
-  $(".wbe-weekday-checkbox:checked").each(function () {
-    const dayName = $(this).attr("name").match(/\[(.*?)\]/)[1];
-    const dayMap = {
-      monday: 1,
-      tuesday: 2,
-      wednesday: 3,
-      thursday: 4,
-      friday: 5,
-      saturday: 6,
-      sunday: 0
-    };
-    if (dayMap[dayName] !== undefined) {
-      formData.weekdays.push(dayMap[dayName]);
-    }
-  });
-  
-  console.group('🔍 DEBUG collectStep2Data');
-  console.log('Start Date:', formData.start_date);
-  console.log('End Date:', formData.end_date);
-  console.log('Weekdays:', formData.weekdays);
-  console.log('Specific (from global var):', formData.specific);
-  console.log('Exclusions (from global var):', formData.exclusions);
-  console.groupEnd();
-  
-  return formData;
-},
+    collectStep2Data: function () {
+      // ✅ CORRECTION : Utiliser directement les variables globales
+      const formData = {
+        start_date: this.convertDateToYMD($("#wbe-start-date").val()) || "",
+        end_date: this.convertDateToYMD($("#wbe-end-date").val()) || "",
+        weekdays: [],
+        specific: specificDates,      // ✅ Variable globale définie en haut du fichier
+        exclusions: exclusionDates    // ✅ Variable globale définie en haut du fichier
+      };
+      
+      // Récupérer les jours de la semaine cochés
+      $(".wbe-weekday-checkbox:checked").each(function () {
+        const dayName = $(this).attr("name").match(/\[(.*?)\]/)[1];
+        const dayMap = {
+          monday: 1,
+          tuesday: 2,
+          wednesday: 3,
+          thursday: 4,
+          friday: 5,
+          saturday: 6,
+          sunday: 0
+        };
+        if (dayMap[dayName] !== undefined) {
+          formData.weekdays.push(dayMap[dayName]);
+        }
+      });
+      
+      console.group('🔍 DEBUG collectStep2Data');
+      console.log('Start Date:', formData.start_date);
+      console.log('End Date:', formData.end_date);
+      console.log('Weekdays:', formData.weekdays);
+      console.log('Specific (from global var):', formData.specific);
+      console.log('Exclusions (from global var):', formData.exclusions);
+      console.groupEnd();
+      
+      return formData;
+    },
 
     /**
-     * Validation côté client pour l'étape 2 - VERSION SIMPLIFIÉE
-     * Toutes les règles sont optionnelles, mais la cohérence est vérifiée
+     * Validation côté client pour l'étape 2 - VERSION ULTRA-SIMPLIFIÉE
+     * Toutes les règles sont optionnelles
+     * PLUS DE restriction sur les dates passées
+     * PLUS DE validation de cohérence entre date début et date fin
      */
     validateStep2Client: function (formData) {
       const errors = [];
 
-      // 1. Vérifier la cohérence des dates (soit aucune, soit les deux)
+      // 1. Si les DEUX dates sont présentes, vérifier que fin >= début
       const hasStartDate = !!formData.start_date;
       const hasEndDate = !!formData.end_date;
 
-      if (hasStartDate !== hasEndDate) {
-        if (hasStartDate && !hasEndDate) {
-          errors.push(
-            "La date de fin est requise si vous définissez une date de début.",
-          );
-        } else if (!hasStartDate && hasEndDate) {
-          errors.push(
-            "La date de début est requise si vous définissez une date de fin.",
-          );
-        }
-      }
-
-      // 2. Si les deux dates sont présentes, vérifier que fin >= début
       if (hasStartDate && hasEndDate) {
         const startTime = new Date(formData.start_date).getTime();
         const endTime = new Date(formData.end_date).getTime();
@@ -445,7 +419,7 @@ collectStep2Data: function () {
         }
       }
 
-      // 3. Vérifier les conflits entre dates spécifiques et exclusions
+      // 2. Vérifier les conflits entre dates spécifiques et exclusions
       if (formData.specific.length > 0 && formData.exclusions.length > 0) {
         const conflicts = formData.specific.filter((date) =>
           formData.exclusions.includes(date),
@@ -547,7 +521,7 @@ collectStep2Data: function () {
     },
 
     /**
-     * Setup datepickers
+     * Setup datepickers - VERSION MODIFIÉE : PLUS de minDate
      */
     setupDatepickers: function () {
       if (!$.fn.datepicker) {
@@ -559,7 +533,7 @@ collectStep2Data: function () {
         dateFormat: wbe_admin_data.date_format_js || "dd/mm/yy",
         changeMonth: true,
         changeYear: true,
-        minDate: 0,
+        // PLUS DE RESTRICTION : minDate retiré pour permettre les dates passées
       });
 
       $(".wbe-clear-date").on("click", function () {

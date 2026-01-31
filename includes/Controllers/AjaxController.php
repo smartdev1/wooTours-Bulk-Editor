@@ -10,6 +10,8 @@
  * - Toutes les règles de disponibilité sont maintenant optionnelles
  * - On peut ne définir aucune règle (conservation des données existantes)
  * - Validation de cohérence maintenue (dates, conflits)
+ * - SUPPRESSION des restrictions : dates passées et durée maximale
+ * - SEULE VALIDATION : date de fin >= date de début
  * 
  * @package     WootourBulkEditor
  * @subpackage  Controllers
@@ -521,31 +523,22 @@ final class AjaxController
     }
 
     /**
-     * Validation spécifique pour l'étape 2 - VERSION SIMPLIFIÉE
+     * Validation spécifique pour l'étape 2 - VERSION ULTRA-SIMPLIFIÉE
      * 
      * MODIFICATIONS MAJEURES :
      * - On ne vérifie PLUS qu'au moins une règle est définie
      * - Toutes les règles sont optionnelles
-     * - On vérifie seulement la cohérence des données fournies
+     * - PLUS de validation de cohérence entre date début et date fin
+     * - Seule validation : si les DEUX dates sont présentes, fin >= début
      */
     private function validate_for_step2(array $changes): array
     {
         $errors = [];
 
-        // 1. Si une plage de dates est définie, la valider
+        // 1. Si DEUX dates sont présentes, valider que fin >= début
         $hasStartDate = !empty($changes['start_date']);
         $hasEndDate = !empty($changes['end_date']);
 
-        // Si une seule date est fournie, c'est une erreur
-        if ($hasStartDate !== $hasEndDate) {
-            if ($hasStartDate && !$hasEndDate) {
-                $errors[] = 'La date de fin est requise si vous définissez une date de début.';
-            } elseif (!$hasStartDate && $hasEndDate) {
-                $errors[] = 'La date de début est requise si vous définissez une date de fin.';
-            }
-        }
-
-        // Si les deux dates sont présentes, valider la plage
         if ($hasStartDate && $hasEndDate) {
             try {
                 $this->validate_date_range($changes['start_date'], $changes['end_date']);
@@ -1171,6 +1164,8 @@ final class AjaxController
 
     /**
      * Validate date range
+     * VERSION SIMPLIFIÉE - SEULE VALIDATION : date de fin >= date de début
+     * 
      * @throws ValidationException
      */
     private function validate_date_range(string $start_date, string $end_date): void
@@ -1200,33 +1195,13 @@ final class AjaxController
             throw new ValidationException('Date de fin invalide.');
         }
 
-        // Main validation: end date cannot be before start date
+        // SEULE VALIDATION : la date de fin ne peut pas être antérieure à la date de début
         if ($end_timestamp < $start_timestamp) {
             throw new ValidationException(
                 sprintf(
                     'La date de fin (%s) ne peut pas être antérieure à la date de début (%s).',
                     date('d/m/Y', $end_timestamp),
                     date('d/m/Y', $start_timestamp)
-                )
-            );
-        }
-
-        // Optional: check that start date is not in the past
-        $today_timestamp = strtotime(date('Y-m-d'));
-        if ($start_timestamp < $today_timestamp) {
-            throw new ValidationException(
-                'La date de début ne peut pas être dans le passé.'
-            );
-        }
-
-        // Optional: limit range to reasonable duration (e.g., 2 years)
-        $max_days = 730; // 2 years
-        $days_diff = ($end_timestamp - $start_timestamp) / (60 * 60 * 24);
-        if ($days_diff > $max_days) {
-            throw new ValidationException(
-                sprintf(
-                    'La plage de dates est trop longue (%d jours maximum).',
-                    $max_days
                 )
             );
         }

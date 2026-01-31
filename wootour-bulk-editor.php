@@ -476,6 +476,298 @@ add_action('admin_init', function() {
     }
 });
 
+
+/**
+ * 🔍 DIAGNOSTIC - Quelle meta key génère wt_start dans le HTML ?
+ * 
+ * URL: /wp-admin/?wbe_trace_frontend_fields&product_id=215
+ */
+
+add_action('admin_init', function() {
+    if (!isset($_GET['wbe_trace_frontend_fields'])) {
+        return;
+    }
+    
+    if (!current_user_can('manage_options')) {
+        wp_die('❌ Permissions insuffisantes');
+    }
+    
+    $product_id = isset($_GET['product_id']) ? absint($_GET['product_id']) : 0;
+    
+    if (!$product_id) {
+        wp_die('Product ID requis. Usage: ?wbe_trace_frontend_fields&product_id=215');
+    }
+    
+    ?>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Diagnostic Frontend Fields - Produit #<?php echo $product_id; ?></title>
+        <style>
+            body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4; }
+            h1, h2 { color: #4ec9b0; }
+            .success { color: #4ec9b0; }
+            .error { color: #f48771; }
+            .warning { color: #dcdcaa; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; background: #2d2d2d; }
+            th, td { padding: 12px; text-align: left; border-bottom: 1px solid #3e3e3e; }
+            th { background: #252526; color: #4ec9b0; }
+            pre { background: #2d2d2d; padding: 15px; border-left: 3px solid #007acc; overflow-x: auto; }
+            .btn { display: inline-block; padding: 10px 20px; background: #007acc; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+        </style>
+    </head>
+    <body>
+        <h1>🔍 Diagnostic - Champs frontend WooTour</h1>
+        
+        <?php
+        $product = wc_get_product($product_id);
+        
+        if (!$product) {
+            echo '<p class="error">❌ Produit introuvable</p>';
+            echo '</body></html>';
+            exit;
+        }
+        
+        echo '<p class="success">📦 Produit : #' . $product_id . ' - ' . esc_html($product->get_name()) . '</p>';
+        
+        // ==========================================
+        // ÉTAPE 1 : Hook dans WooTour pour voir les champs générés
+        // ==========================================
+        
+        echo '<h2>1️⃣ Simulation de génération des champs cachés</h2>';
+        
+        // Récupérer TOUTES les métadonnées du produit
+        global $wpdb;
+        $all_meta = $wpdb->get_results($wpdb->prepare(
+            "SELECT meta_key, meta_value 
+             FROM {$wpdb->postmeta} 
+             WHERE post_id = %d 
+             AND meta_key LIKE 'wt_%'
+             ORDER BY meta_key",
+            $product_id
+        ));
+        
+        echo '<h3>Métadonnées WooTour disponibles :</h3>';
+        echo '<table>';
+        echo '<thead><tr><th>Meta Key</th><th>Meta Value (brut)</th><th>Meta Value (formaté)</th></tr></thead>';
+        echo '<tbody>';
+        
+        foreach ($all_meta as $meta) {
+            echo '<tr>';
+            echo '<td><code>' . esc_html($meta->meta_key) . '</code></td>';
+            echo '<td><code>' . esc_html(substr($meta->meta_value, 0, 100)) . '</code></td>';
+            echo '<td>';
+            
+            // Formatter selon le type
+            if (is_numeric($meta->meta_value) && $meta->meta_value > 1000000) {
+                echo '<strong>' . date('Y-m-d', $meta->meta_value) . '</strong> (timestamp)';
+            } elseif (is_serialized($meta->meta_value)) {
+                $unserialized = @unserialize($meta->meta_value);
+                if (is_array($unserialized)) {
+                    echo 'Array (' . count($unserialized) . ' éléments)';
+                } else {
+                    echo 'Sérialisé';
+                }
+            } else {
+                echo esc_html($meta->meta_value);
+            }
+            
+            echo '</td>';
+            echo '</tr>';
+        }
+        
+        echo '</tbody>';
+        echo '</table>';
+        
+        // ==========================================
+        // ÉTAPE 2 : Chercher dans le code source WooTour
+        // ==========================================
+        
+        echo '<h2>2️⃣ Recherche dans le code WooTour</h2>';
+        
+        $wootour_path = WP_PLUGIN_DIR . '/wootour/';
+        
+        if (file_exists($wootour_path)) {
+            echo '<p class="success">✅ WooTour trouvé dans : ' . $wootour_path . '</p>';
+            
+            // Chercher les fichiers qui génèrent wt_start
+            $search_patterns = [
+                'name="wt_start"',
+                'wt_start',
+                'booking_start',
+                'tour_start',
+            ];
+            
+            echo '<h3>Recherche des patterns dans le code :</h3>';
+            
+            $found_files = [];
+            
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($wootour_path)
+            );
+            
+            foreach ($iterator as $file) {
+                if ($file->isFile() && $file->getExtension() === 'php') {
+                    $content = file_get_contents($file->getPathname());
+                    
+                    foreach ($search_patterns as $pattern) {
+                        if (stripos($content, $pattern) !== false) {
+                            $found_files[$file->getPathname()][] = $pattern;
+                        }
+                    }
+                }
+            }
+            
+            if (!empty($found_files)) {
+                echo '<table>';
+                echo '<thead><tr><th>Fichier</th><th>Patterns trouvés</th></tr></thead>';
+                echo '<tbody>';
+                
+                foreach ($found_files as $file => $patterns) {
+                    echo '<tr>';
+                    echo '<td><code>' . str_replace($wootour_path, '', $file) . '</code></td>';
+                    echo '<td>' . implode(', ', array_unique($patterns)) . '</td>';
+                    echo '</tr>';
+                }
+                
+                echo '</tbody>';
+                echo '</table>';
+            } else {
+                echo '<p class="warning">⚠️ Aucun fichier trouvé avec ces patterns</p>';
+            }
+            
+        } else {
+            echo '<p class="error">❌ Répertoire WooTour non trouvé</p>';
+        }
+        
+        // ==========================================
+        // ÉTAPE 3 : Produit de référence WooTour natif
+        // ==========================================
+        
+        echo '<h2>3️⃣ Comparaison avec un produit WooTour natif</h2>';
+        
+        // Trouver un autre produit WooTour
+        $reference_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT post_id 
+             FROM {$wpdb->postmeta} 
+             WHERE meta_key = 'wt_start' 
+             AND post_id != %d 
+             LIMIT 1",
+            $product_id
+        ));
+        
+        if ($reference_id) {
+            echo '<p class="success">✅ Produit de référence : #' . $reference_id . '</p>';
+            
+            // Comparer les métadonnées
+            $ref_meta = $wpdb->get_results($wpdb->prepare(
+                "SELECT meta_key, meta_value 
+                 FROM {$wpdb->postmeta} 
+                 WHERE post_id = %d 
+                 AND meta_key LIKE 'wt_%'
+                 ORDER BY meta_key",
+                $reference_id
+            ));
+            
+            echo '<h3>Métadonnées du produit de référence :</h3>';
+            echo '<table>';
+            echo '<thead><tr><th>Meta Key</th><th>Produit #' . $product_id . '</th><th>Produit #' . $reference_id . ' (référence)</th><th>Status</th></tr></thead>';
+            echo '<tbody>';
+            
+            $ref_meta_map = [];
+            foreach ($ref_meta as $meta) {
+                $ref_meta_map[$meta->meta_key] = $meta->meta_value;
+            }
+            
+            $current_meta_map = [];
+            foreach ($all_meta as $meta) {
+                $current_meta_map[$meta->meta_key] = $meta->meta_value;
+            }
+            
+            // Fusionner toutes les clés
+            $all_keys = array_unique(array_merge(
+                array_keys($current_meta_map),
+                array_keys($ref_meta_map)
+            ));
+            
+            sort($all_keys);
+            
+            foreach ($all_keys as $key) {
+                $current_val = $current_meta_map[$key] ?? null;
+                $ref_val = $ref_meta_map[$key] ?? null;
+                
+                echo '<tr>';
+                echo '<td><code>' . esc_html($key) . '</code></td>';
+                
+                // Valeur actuelle
+                echo '<td>';
+                if ($current_val === null) {
+                    echo '<span class="error">MANQUANT</span>';
+                } elseif (is_numeric($current_val) && $current_val > 1000000) {
+                    echo date('Y-m-d', $current_val);
+                } else {
+                    echo esc_html(substr($current_val, 0, 50));
+                }
+                echo '</td>';
+                
+                // Valeur référence
+                echo '<td>';
+                if ($ref_val === null) {
+                    echo '<span class="error">MANQUANT</span>';
+                } elseif (is_numeric($ref_val) && $ref_val > 1000000) {
+                    echo date('Y-m-d', $ref_val);
+                } else {
+                    echo esc_html(substr($ref_val, 0, 50));
+                }
+                echo '</td>';
+                
+                // Status
+                echo '<td>';
+                if ($current_val === null && $ref_val !== null) {
+                    echo '<span class="error">❌ MANQUANT</span>';
+                } elseif ($current_val !== null && $ref_val === null) {
+                    echo '<span class="warning">⚠️ Extra</span>';
+                } elseif ($current_val === $ref_val) {
+                    echo '<span class="success">✅ Identique</span>';
+                } else {
+                    echo '<span class="warning">⚠️ Différent</span>';
+                }
+                echo '</td>';
+                
+                echo '</tr>';
+            }
+            
+            echo '</tbody>';
+            echo '</table>';
+            
+        } else {
+            echo '<p class="warning">⚠️ Aucun produit de référence trouvé</p>';
+        }
+        
+        // ==========================================
+        // ACTIONS
+        // ==========================================
+        
+        echo '<h2>📋 Actions recommandées</h2>';
+        
+        echo '<div>';
+        echo '<a href="' . get_permalink($product_id) . '" class="btn" target="_blank">Voir sur le frontend</a>';
+        echo '<a href="' . admin_url('post.php?post=' . $product_id . '&action=edit') . '" class="btn" target="_blank">Éditer dans WooCommerce</a>';
+        
+        if ($reference_id) {
+            echo '<a href="' . get_permalink($reference_id) . '" class="btn" target="_blank">Voir produit référence sur le frontend</a>';
+        }
+        
+        echo '</div>';
+        
+        ?>
+    </body>
+    </html>
+    <?php
+    
+    exit;
+});
+
 add_action('admin_init', function() {
     if (isset($_GET['test_final_solution_all_dates'])) {
         $product_id = intval($_GET['product_id'] ?? 0);
