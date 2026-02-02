@@ -38,8 +38,6 @@
       this.setupDateManagement();
       this.updateStats();
       this.populateCategories();
-
-      console.log("WBE Admin initialized successfully");
     },
 
     /**
@@ -363,13 +361,15 @@
         start_date: this.convertDateToYMD($("#wbe-start-date").val()) || "",
         end_date: this.convertDateToYMD($("#wbe-end-date").val()) || "",
         weekdays: [],
-        specific: specificDates,      // ✅ Variable globale définie en haut du fichier
-        exclusions: exclusionDates    // ✅ Variable globale définie en haut du fichier
+        specific: specificDates, // ✅ Variable globale définie en haut du fichier
+        exclusions: exclusionDates, // ✅ Variable globale définie en haut du fichier
       };
-      
+
       // Récupérer les jours de la semaine cochés
       $(".wbe-weekday-checkbox:checked").each(function () {
-        const dayName = $(this).attr("name").match(/\[(.*?)\]/)[1];
+        const dayName = $(this)
+          .attr("name")
+          .match(/\[(.*?)\]/)[1];
         const dayMap = {
           monday: 1,
           tuesday: 2,
@@ -377,21 +377,21 @@
           thursday: 4,
           friday: 5,
           saturday: 6,
-          sunday: 0
+          sunday: 0,
         };
         if (dayMap[dayName] !== undefined) {
           formData.weekdays.push(dayMap[dayName]);
         }
       });
-      
-      console.group('🔍 DEBUG collectStep2Data');
-      console.log('Start Date:', formData.start_date);
-      console.log('End Date:', formData.end_date);
-      console.log('Weekdays:', formData.weekdays);
-      console.log('Specific (from global var):', formData.specific);
-      console.log('Exclusions (from global var):', formData.exclusions);
+
+      console.group("🔍 DEBUG collectStep2Data");
+      console.log("Start Date:", formData.start_date);
+      console.log("End Date:", formData.end_date);
+      console.log("Weekdays:", formData.weekdays);
+      console.log("Specific (from global var):", formData.specific);
+      console.log("Exclusions (from global var):", formData.exclusions);
       console.groupEnd();
-      
+
       return formData;
     },
 
@@ -521,7 +521,7 @@
     },
 
     /**
-     * Setup datepickers - VERSION MODIFIÉE : PLUS de minDate
+     * Setup datepickers - VERSION MODIFIÉE : Bloquer les dates passées
      */
     setupDatepickers: function () {
       if (!$.fn.datepicker) {
@@ -529,11 +529,12 @@
         return;
       }
 
+      // ✅ MODIFICATION : Ajouter minDate: 0 pour bloquer les dates passées
       $(".wbe-datepicker").datepicker({
         dateFormat: wbe_admin_data.date_format_js || "dd/mm/yy",
         changeMonth: true,
         changeYear: true,
-        // PLUS DE RESTRICTION : minDate retiré pour permettre les dates passées
+        minDate: 0, // ✅ 0 = aujourd'hui, interdit les dates passées
       });
 
       $(".wbe-clear-date").on("click", function () {
@@ -542,6 +543,383 @@
           .val("")
           .datepicker("setDate", null);
       });
+    },
+
+    /**
+     * Setup date management (dates spécifiques et exclusions)
+     * VERSION COMPLÈTE ET DEBUGGÉE
+     */
+    setupDateManagement: function () {
+      const self = this;
+
+
+      // ✅ Initialiser les datepickers pour l'ajout
+      $("#wbe-add-specific-date").datepicker({
+        dateFormat: wbe_admin_data.date_format_js || "dd/mm/yy",
+        minDate: 0, // Aujourd'hui minimum
+        onSelect: function (dateText, inst) {
+          console.log("📅 Date spécifique sélectionnée:", dateText);
+        },
+      });
+
+      $("#wbe-add-exclusion-date").datepicker({
+        dateFormat: wbe_admin_data.date_format_js || "dd/mm/yy",
+        minDate: 0, // Aujourd'hui minimum
+        onSelect: function (dateText, inst) {
+          console.log("📅 Date d'exclusion sélectionnée:", dateText);
+        },
+      });
+
+      console.log("✅ Datepickers initialisés");
+
+      // ✅ ÉVÉNEMENT : Ajouter une date spécifique
+      $("#wbe-add-specific-btn")
+        .off("click")
+        .on("click", function (e) {
+          e.preventDefault();
+          console.log("🖱️ Clic sur bouton 'Ajouter date spécifique'");
+
+          const dateInput = $("#wbe-add-specific-date");
+          const dateValue = dateInput.val().trim();
+
+          console.log("🔍 Valeur du champ:", dateValue);
+          console.log(
+            "🔍 Input jQuery object:",
+            dateInput.length,
+            "élément(s) trouvé(s)",
+          );
+
+          if (!dateValue) {
+            console.warn("⚠️ Aucune date saisie");
+            self.showToast("Erreur", "Veuillez sélectionner une date", "error");
+            return;
+          }
+
+          // Convertir en format YYYY-MM-DD pour le stockage
+          const convertedDate = self.convertDateToYMD(dateValue);
+          console.log("🔄 Date convertie:", convertedDate);
+
+          if (!convertedDate) {
+            console.error("❌ Conversion échouée pour:", dateValue);
+            self.showToast("Erreur", "Format de date invalide", "error");
+            return;
+          }
+
+          // ✅ VALIDATION : Vérifier que la date n'est pas dans le passé
+          const selectedDate = new Date(convertedDate);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          selectedDate.setHours(0, 0, 0, 0);
+
+          console.log("📊 Comparaison dates:");
+          console.log("  - Date sélectionnée:", selectedDate);
+          console.log("  - Aujourd'hui:", today);
+          console.log(
+            "  - Est dans le passé?",
+            selectedDate.getTime() < today.getTime(),
+          );
+
+          if (selectedDate.getTime() < today.getTime()) {
+            console.warn("⚠️ Date dans le passé refusée");
+            self.showToast(
+              "Erreur",
+              "Impossible d'ajouter une date passée (" +
+                self.formatDateForDisplay(convertedDate) +
+                ")",
+              "error",
+            );
+            return;
+          }
+
+          // Vérifier si la date n'est pas déjà ajoutée
+          console.log(
+            "🔍 Vérification doublon. Liste actuelle:",
+            specificDates,
+          );
+
+          if (!specificDates.includes(convertedDate)) {
+            specificDates.push(convertedDate);
+            console.log("✅ Date ajoutée aux dates spécifiques");
+            console.log("📋 Nouvelle liste:", specificDates);
+
+            self.updateSpecificDatesList();
+            dateInput.val("");
+
+            self.showToast(
+              "Succès",
+              "Date ajoutée aux dates spécifiques",
+              "success",
+            );
+          } else {
+            console.warn("⚠️ Date déjà présente dans la liste");
+            self.showToast(
+              "Avertissement",
+              "Cette date est déjà ajoutée",
+              "warning",
+            );
+          }
+        });
+
+      // ✅ ÉVÉNEMENT : Ajouter une date d'exclusion
+      $("#wbe-add-exclusion-btn")
+        .off("click")
+        .on("click", function (e) {
+          e.preventDefault();
+          console.log("🖱️ Clic sur bouton 'Ajouter date d'exclusion'");
+
+          const dateInput = $("#wbe-add-exclusion-date");
+          const dateValue = dateInput.val().trim();
+
+          console.log("🔍 Valeur du champ:", dateValue);
+          console.log(
+            "🔍 Input jQuery object:",
+            dateInput.length,
+            "élément(s) trouvé(s)",
+          );
+
+          if (!dateValue) {
+            console.warn("⚠️ Aucune date saisie");
+            self.showToast("Erreur", "Veuillez sélectionner une date", "error");
+            return;
+          }
+
+          // Convertir en format YYYY-MM-DD pour le stockage
+          const convertedDate = self.convertDateToYMD(dateValue);
+          console.log("🔄 Date convertie:", convertedDate);
+
+          if (!convertedDate) {
+            console.error("❌ Conversion échouée pour:", dateValue);
+            self.showToast("Erreur", "Format de date invalide", "error");
+            return;
+          }
+
+          // ✅ VALIDATION : Vérifier que la date n'est pas dans le passé
+          const selectedDate = new Date(convertedDate);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          selectedDate.setHours(0, 0, 0, 0);
+
+          console.log("📊 Comparaison dates:");
+          console.log("  - Date sélectionnée:", selectedDate);
+          console.log("  - Aujourd'hui:", today);
+          console.log(
+            "  - Est dans le passé?",
+            selectedDate.getTime() < today.getTime(),
+          );
+
+          if (selectedDate.getTime() < today.getTime()) {
+            console.warn("⚠️ Date dans le passé refusée");
+            self.showToast(
+              "Erreur",
+              "Impossible d'ajouter une date passée (" +
+                self.formatDateForDisplay(convertedDate) +
+                ")",
+              "error",
+            );
+            return;
+          }
+
+          // Vérifier si la date n'est pas déjà exclue
+          console.log(
+            "🔍 Vérification doublon. Liste actuelle:",
+            exclusionDates,
+          );
+
+          if (!exclusionDates.includes(convertedDate)) {
+            exclusionDates.push(convertedDate);
+            console.log("✅ Date ajoutée aux dates d'exclusion");
+            console.log("📋 Nouvelle liste:", exclusionDates);
+
+            self.updateExclusionDatesList();
+            dateInput.val("");
+
+            self.showToast("Succès", "Date ajoutée aux exclusions", "success");
+          } else {
+            console.warn("⚠️ Date déjà présente dans la liste");
+            self.showToast(
+              "Avertissement",
+              "Cette date est déjà exclue",
+              "warning",
+            );
+          }
+        });
+
+      // ✅ ÉVÉNEMENT : Effacer toutes les dates spécifiques
+      $("#wbe-clear-specific")
+        .off("click")
+        .on("click", function (e) {
+          e.preventDefault();
+          console.log("🖱️ Clic sur 'Effacer dates spécifiques'");
+
+          if (
+            specificDates.length > 0 &&
+            confirm(
+              "Voulez-vous vraiment supprimer toutes les dates spécifiques ?",
+            )
+          ) {
+            console.log(
+              "🗑️ Suppression de",
+              specificDates.length,
+              "dates spécifiques",
+            );
+            specificDates = [];
+
+            self.updateSpecificDatesList();
+            self.showToast(
+              "Information",
+              "Toutes les dates spécifiques ont été supprimées",
+              "info",
+            );
+          } else {
+            console.log("❌ Suppression annulée ou liste vide");
+          }
+        });
+
+      // ✅ ÉVÉNEMENT : Effacer toutes les exclusions
+      $("#wbe-clear-exclusions")
+        .off("click")
+        .on("click", function (e) {
+          e.preventDefault();
+          console.log("🖱️ Clic sur 'Effacer dates d'exclusion'");
+
+          if (
+            exclusionDates.length > 0 &&
+            confirm("Voulez-vous vraiment supprimer toutes les exclusions ?")
+          ) {
+            console.log(
+              "🗑️ Suppression de",
+              exclusionDates.length,
+              "dates d'exclusion",
+            );
+            exclusionDates = [];
+
+            self.updateExclusionDatesList();
+            self.showToast(
+              "Information",
+              "Toutes les dates exclues ont été supprimées",
+              "info",
+            );
+          } else {
+            console.log("❌ Suppression annulée ou liste vide");
+          }
+        });
+
+      // ✅ Initialiser les listes au chargement
+      console.log("📋 Initialisation des listes de dates");
+      self.updateSpecificDatesList();
+      self.updateExclusionDatesList();
+
+      console.log("✅ setupDateManagement terminé");
+      console.log("📊 État initial:");
+      console.log("  - specificDates:", specificDates);
+      console.log("  - exclusionDates:", exclusionDates);
+    },
+    /**
+     * Validation côté client pour l'étape 2
+     * VERSION MODIFIÉE : Ajouter validation des dates passées
+     */
+    validateStep2Client: function (formData) {
+      const errors = [];
+
+      // ✅ Obtenir la date d'aujourd'hui à minuit
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayTime = today.getTime();
+
+      // 1. ✅ VALIDATION : Vérifier que les dates ne sont pas dans le passé
+      if (formData.start_date) {
+        const startDate = new Date(formData.start_date);
+        startDate.setHours(0, 0, 0, 0);
+
+        if (startDate.getTime() < todayTime) {
+          errors.push(
+            "La date de début ne peut pas être antérieure à aujourd'hui.",
+          );
+        }
+      }
+
+      if (formData.end_date) {
+        const endDate = new Date(formData.end_date);
+        endDate.setHours(0, 0, 0, 0);
+
+        if (endDate.getTime() < todayTime) {
+          errors.push(
+            "La date de fin ne peut pas être antérieure à aujourd'hui.",
+          );
+        }
+      }
+
+      // 2. Validation de cohérence si les DEUX dates sont présentes
+      const hasStartDate = !!formData.start_date;
+      const hasEndDate = !!formData.end_date;
+
+      if (hasStartDate && hasEndDate) {
+        const startTime = new Date(formData.start_date).getTime();
+        const endTime = new Date(formData.end_date).getTime();
+
+        if (endTime < startTime) {
+          errors.push(
+            "La date de fin ne peut pas être antérieure à la date de début.",
+          );
+        }
+      }
+
+      // 3. ✅ VALIDATION : Vérifier que les dates spécifiques ne sont pas dans le passé
+      if (formData.specific && formData.specific.length > 0) {
+        const pastDates = [];
+
+        formData.specific.forEach((dateStr) => {
+          const date = new Date(dateStr);
+          date.setHours(0, 0, 0, 0);
+
+          if (date.getTime() < todayTime) {
+            pastDates.push(this.formatDateForDisplay(dateStr));
+          }
+        });
+
+        if (pastDates.length > 0) {
+          errors.push(
+            `Les dates spécifiques suivantes sont dans le passé : ${pastDates.join(", ")}. Veuillez les supprimer.`,
+          );
+        }
+      }
+
+      // 4. ✅ VALIDATION : Vérifier que les dates d'exclusion ne sont pas dans le passé
+      if (formData.exclusions && formData.exclusions.length > 0) {
+        const pastDates = [];
+
+        formData.exclusions.forEach((dateStr) => {
+          const date = new Date(dateStr);
+          date.setHours(0, 0, 0, 0);
+
+          if (date.getTime() < todayTime) {
+            pastDates.push(this.formatDateForDisplay(dateStr));
+          }
+        });
+
+        if (pastDates.length > 0) {
+          errors.push(
+            `Les dates d'exclusion suivantes sont dans le passé : ${pastDates.join(", ")}. Veuillez les supprimer.`,
+          );
+        }
+      }
+
+      // 5. Vérifier les conflits entre dates spécifiques et exclusions
+      if (formData.specific.length > 0 && formData.exclusions.length > 0) {
+        const conflicts = formData.specific.filter((date) =>
+          formData.exclusions.includes(date),
+        );
+        if (conflicts.length > 0) {
+          const conflictDatesFormatted = conflicts.map((date) =>
+            this.formatDateForDisplay(date),
+          );
+          errors.push(
+            `Les dates suivantes sont à la fois marquées comme disponibles et exclues : ${conflictDatesFormatted.join(", ")}`,
+          );
+        }
+      }
+
+      return errors;
     },
 
     /**
@@ -815,7 +1193,8 @@
 
       // Vérifier si au moins une règle est définie
       const hasRules =
-        (formData.start_date && formData.end_date) ||
+        formData.start_date ||
+        formData.end_date ||
         formData.weekdays.length > 0 ||
         formData.specific.length > 0 ||
         formData.exclusions.length > 0;
@@ -828,10 +1207,18 @@
           '<span style="font-size: 13px; color: #856404;">Les informations existantes des produits seront conservées.</span>';
         html += "</div>";
       } else {
-        if (formData.start_date && formData.end_date) {
-          const startFr = this.formatDateForDisplay(formData.start_date);
-          const endFr = this.formatDateForDisplay(formData.end_date);
-          html += `<div class="wbe-review-section"><strong>Période :</strong> ${startFr} au ${endFr}</div>`;
+        if (formData.start_date || formData.end_date) {
+          if (formData.start_date && formData.end_date) {
+            const startFr = this.formatDateForDisplay(formData.start_date);
+            const endFr = this.formatDateForDisplay(formData.end_date);
+            html += `<div class="wbe-review-section"><strong>Période :</strong> ${startFr} au ${endFr}</div>`;
+          } else if (formData.start_date) {
+            const startFr = this.formatDateForDisplay(formData.start_date);
+            html += `<div class="wbe-review-section"><strong>Période :</strong> À partir du ${startFr}</div>`;
+          } else {
+            const endFr = this.formatDateForDisplay(formData.end_date);
+            html += `<div class="wbe-review-section"><strong>Période :</strong> Jusqu'au ${endFr}</div>`;
+          }
         }
 
         if (formData.weekdays.length > 0) {

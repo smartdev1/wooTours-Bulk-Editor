@@ -130,7 +130,7 @@ final class WootourRepository implements RepositoryInterface
         $availability_data = [];
 
         if (!empty($raw_data)) {
-            error_log('[WBE WootourRepository] Raw data from DB: ' . $raw_data);
+            error_log('[WBE WootourRepository] Raw data from DB: ' . substr($raw_data, 0, 500) . '...');
 
             try {
                 // Première désérialisation
@@ -142,24 +142,54 @@ final class WootourRepository implements RepositoryInterface
 
                     if (is_array($second_pass)) {
                         $availability_data = $second_pass;
-                        error_log('[WBE WootourRepository] Double unserialized: ' . print_r($availability_data, true));
-                    } else {
-                        error_log('[WBE WootourRepository] Second unserialize failed or not array');
+                        error_log('[WBE WootourRepository] Double unserialized successfully');
                     }
                 } elseif (is_array($first_pass)) {
-                    // Si déjà un tableau (simple sérialisation)
                     $availability_data = $first_pass;
-                    error_log('[WBE WootourRepository] Single unserialized: ' . print_r($availability_data, true));
+                    error_log('[WBE WootourRepository] Single unserialized successfully');
                 }
             } catch (\Exception $e) {
                 error_log('[WBE WootourRepository] Unserialize error: ' . $e->getMessage());
             }
-        } else {
-            error_log('[WBE WootourRepository] No availability data found for product #' . $product_id);
         }
+
+        // ⚠️ DEBUG : Vérifier le contenu avant nettoyage
+        error_log('[WBE WootourRepository] Before cleanup - specific: ' . print_r($availability_data['specific'] ?? 'NOT SET', true));
+        error_log('[WBE WootourRepository] Before cleanup - exclusions: ' . print_r($availability_data['exclusions'] ?? 'NOT SET', true));
 
         // Nettoyer les données
         unset($availability_data['raw_data'], $availability_data['product_id']);
+
+        // ⚠️ Si 'specific' ou 'exclusions' sont des timestamps, les convertir
+        if (!empty($availability_data['specific'])) {
+            $availability_data['specific'] = array_map(function ($timestamp) {
+                if (is_numeric($timestamp)) {
+                    return date('Y-m-d', (int) $timestamp);
+                }
+                return $timestamp;
+            }, $availability_data['specific']);
+            error_log('[WBE WootourRepository] Specific dates converted: ' . print_r($availability_data['specific'], true));
+        }
+
+        if (!empty($availability_data['exclusions'])) {
+            $availability_data['exclusions'] = array_map(function ($timestamp) {
+                if (is_numeric($timestamp)) {
+                    return date('Y-m-d', (int) $timestamp);
+                }
+                return $timestamp;
+            }, $availability_data['exclusions']);
+            error_log('[WBE WootourRepository] Exclusions converted: ' . print_r($availability_data['exclusions'], true));
+        }
+
+        if (!empty($availability_data['specific'])) {
+            $availability_data['specific'] = array_map(function ($timestamp) {
+                if (is_numeric($timestamp)) {
+                    return date('Y-m-d', (int) $timestamp);
+                }
+                return $timestamp;
+            }, $availability_data['specific']);
+            error_log('[WBE WootourRepository] Specific dates converted: ' . print_r($availability_data['specific'], true));
+        }
 
         // Créer l'objet Availability
         $availability = new Availability($availability_data);
@@ -181,6 +211,15 @@ final class WootourRepository implements RepositoryInterface
     public function updateAvailability(int $product_id, array $availability_data): bool
     {
         error_log('[WBE WootourRepository] === START updateAvailability ===');
+        error_log('[WBE WootourRepository] Product ID: ' . $product_id);
+        error_log('[WBE WootourRepository] Availability data received: ' . print_r($availability_data, true));
+
+        if (isset($availability_data['specific'])) {
+            error_log('[WBE WootourRepository] ✅ SPECIFIC DATES PRESENT: ' . count($availability_data['specific']) . ' date(s)');
+            error_log('[WBE WootourRepository] Specific dates: ' . print_r($availability_data['specific'], true));
+        } else {
+            error_log('[WBE WootourRepository] ❌ SPECIFIC DATES NOT IN DATA');
+        }
 
         try {
             // 1. Mettre à jour les métadonnées WooTours (timestamps)
@@ -233,12 +272,30 @@ final class WootourRepository implements RepositoryInterface
         }
     }
 
-    /**
-     * Formater les dates pour WooTours (timestamp UNIX)
-     */
     private function formatForWootour(array $availability_data, int $product_id): string
     {
         error_log('[WBE WootourRepository] Formatting for Wootour with UNIX timestamps');
+
+        // ⚠️ IMPORTANT : Convertir AUSSI les exclusions et specific en timestamps
+        $exclusions_timestamps = [];
+        if (!empty($availability_data['exclusions'])) {
+            foreach ($availability_data['exclusions'] as $date) {
+                $timestamp = is_numeric($date) ? (int) $date : strtotime($date);
+                if ($timestamp !== false) {
+                    $exclusions_timestamps[] = $timestamp;
+                }
+            }
+        }
+
+        $specific_timestamps = [];
+        if (!empty($availability_data['specific'])) {
+            foreach ($availability_data['specific'] as $date) {
+                $timestamp = is_numeric($date) ? (int) $date : strtotime($date);
+                if ($timestamp !== false) {
+                    $specific_timestamps[] = $timestamp;
+                }
+            }
+        }
 
         // Convertir les dates en timestamps UNIX
         $start_timestamp = !empty($availability_data['start_date'])
@@ -251,18 +308,18 @@ final class WootourRepository implements RepositoryInterface
 
         // Format attendu par WooTours
         $clean_data = [
-            'start_date' => $availability_data['start_date'] ?? '', // Garder aussi le format string
-            'end_date' => $availability_data['end_date'] ?? '',
+            'start_date' => $start_timestamp,
+            'end_date' => $end_timestamp,
             'weekdays' => $availability_data['weekdays'] ?? [],
-            'exclusions' => $availability_data['exclusions'] ?? [],
-            'specific' => $availability_data['specific'] ?? [],
+            'exclusions' => $exclusions_timestamps,
+            'specific' => $specific_timestamps,
             'raw_data' => $availability_data['raw_data'] ?? [],
             'product_id' => $product_id,
         ];
 
-        error_log('[WBE WootourRepository] Clean data: ' . print_r($clean_data, true));
+        error_log('[WBE WootourRepository] Clean data (timestamps): ' . print_r($clean_data, true));
 
-        //  DOUBLE SÉRIALISATION
+        // DOUBLE SÉRIALISATION
         $serialized_array = serialize($clean_data);
         $double_serialized = serialize($serialized_array);
 
@@ -270,227 +327,343 @@ final class WootourRepository implements RepositoryInterface
     }
 
     /**
-     * Mettre à jour les métadonnées WooTours (timestamp UNIX unique)
+     * Mettre à jour les métadonnées WooTours avec structure de champs indexés
      * 
-     * ⚠️ MODIFICATION MAJEURE : Un seul timestamp par meta key, pas de tableaux
+     * ⚠️ MODIFICATION COMPLÈTE : Structure de champs indexés pour compatibilité WooTours
      */
     private function updateWootourTimestampMeta(int $product_id, array $availability_data): bool
     {
         error_log('');
         error_log('████████████████████████████████████████');
-        error_log('🔵 updateWootourTimestampMeta() DÉBUT');
+        error_log('🔄 updateWootourTimestampMeta() DÉBUT');
         error_log('████████████████████████████████████████');
         error_log('Product ID: ' . $product_id);
-        error_log('Availability Data reçue:');
-        error_log(print_r($availability_data, true));
+        error_log('Data received: ' . print_r($availability_data, true));
         error_log('');
 
-        // Convertir les dates en timestamps UNIX
-        $start_timestamp = !empty($availability_data['start_date'])
-            ? strtotime($availability_data['start_date'])
-            : '';
+        // === 1. RÉCUPÉRATION DES DONNÉES EXISTANTES ===
+        error_log('📥 Récupération des données existantes...');
 
-        $end_timestamp = !empty($availability_data['end_date'])
-            ? strtotime($availability_data['end_date'])
-            : '';
+        // Dates d'exclusion existantes
+        $existing_exclusions = $this->getExistingDates($product_id, 'wt_disable_book');
+        error_log('  wt_disable_book existant: ' . count($existing_exclusions) . ' date(s)');
+        if (!empty($existing_exclusions)) {
+            error_log('  Existing exclusions: ' . print_r($existing_exclusions, true));
+        }
 
-        error_log('🕐 Timestamps calculés:');
-        error_log('  start_timestamp: ' . ($start_timestamp ?: 'VIDE'));
-        error_log('  end_timestamp: ' . ($end_timestamp ?: 'VIDE'));
+        // Dates spécifiques existantes
+        $existing_specific = $this->getExistingDates($product_id, 'wt_customdate');
+        error_log('  wt_customdate existant: ' . count($existing_specific) . ' date(s)');
+        if (!empty($existing_specific)) {
+            error_log('  Existing specific: ' . print_r($existing_specific, true));
+        }
+
         error_log('');
 
-        // === MÉTADONNÉES PRINCIPALES (timestamp unique) ===
+        // === 2. TRAITEMENT DES DATES D'EXCLUSION ===
+        if (isset($availability_data['exclusions']) && is_array($availability_data['exclusions'])) {
+            error_log('═══════════════════════════════════════');
+            error_log('🔴 TRAITEMENT DES EXCLUSIONS');
+            error_log('═══════════════════════════════════════');
+            error_log('  Nouvelles exclusions: ' . print_r($availability_data['exclusions'], true));
+
+            // Fusionner les dates (éviter les doublons)
+            $all_exclusions = array_unique(array_merge($existing_exclusions, $availability_data['exclusions']));
+            error_log('  Fusion: ' . count($existing_exclusions) . ' existant + ' .
+                count($availability_data['exclusions']) . ' nouvelles = ' .
+                count($all_exclusions) . ' total');
+
+            // Sauvegarder chaque date dans un champ séparé (structure indexée)
+            $this->saveIndexedDates($product_id, 'wt_disable_book', $all_exclusions);
+
+            // Sauvegarder aussi dans wt_disabledate avec structure indexée
+            $this->saveIndexedDates($product_id, 'wt_disabledate', $all_exclusions, true);
+        } else {
+            error_log('⏭️  Exclusions: PAS DANS availability_data ou pas un tableau');
+            error_log('  Type: ' . gettype($availability_data['exclusions'] ?? 'not set'));
+        }
+
+        // === 3. TRAITEMENT DES DATES SPÉCIFIQUES ===
+        error_log('');
+        error_log('═══════════════════════════════════════');
+        error_log('🟢 TRAITEMENT DES DATES SPÉCIFIQUES');
+        error_log('═══════════════════════════════════════');
+
+        if (isset($availability_data['specific'])) {
+            error_log('  ✅ specific IS SET');
+            error_log('  Type: ' . gettype($availability_data['specific']));
+            error_log('  Content: ' . print_r($availability_data['specific'], true));
+
+            if (is_array($availability_data['specific'])) {
+                error_log('  ✅ specific IS ARRAY with ' . count($availability_data['specific']) . ' element(s)');
+
+                if (!empty($availability_data['specific'])) {
+                    error_log('  ✅ specific IS NOT EMPTY');
+
+                    // Fusionner les dates (éviter les doublons)
+                    $all_specific = array_unique(array_merge($existing_specific, $availability_data['specific']));
+                    error_log('  Fusion: ' . count($existing_specific) . ' existant + ' .
+                        count($availability_data['specific']) . ' nouvelles = ' .
+                        count($all_specific) . ' total');
+                    error_log('  All specific dates to save: ' . print_r($all_specific, true));
+
+                    // ⚠️ IMPORTANT : Supprimer d'abord les anciennes entrées
+                    delete_post_meta($product_id, 'wt_customdate');
+                    error_log('  🧹 Deleted all existing wt_customdate entries');
+
+                    // Sauvegarder chaque date dans un champ séparé (structure indexée)
+                    $this->saveIndexedDates($product_id, 'wt_customdate', $all_specific, false);
+
+                    // Vérifier immédiatement ce qui a été sauvegardé
+                    $saved = $this->getExistingDates($product_id, 'wt_customdate');
+                    error_log('  ✅ Verification: ' . count($saved) . ' date(s) saved');
+                    error_log('  Saved dates: ' . print_r($saved, true));
+                } else {
+                    error_log('  ⚠️  specific IS EMPTY ARRAY');
+                }
+            } else {
+                error_log('  ❌ specific IS NOT AN ARRAY');
+            }
+        } else {
+            error_log('  ❌ specific NOT SET in availability_data');
+            error_log('  Available keys: ' . print_r(array_keys($availability_data), true));
+        }
+
+        // === 4. MÉTADONNÉES PRINCIPALES (inchangées) ===
+        error_log('');
+        error_log('═══════════════════════════════════════');
+        error_log('🔵 MÉTADONNÉES PRINCIPALES');
+        error_log('═══════════════════════════════════════');
 
         // wt_start - timestamp UNIX (début)
-        if (!empty($start_timestamp)) {
-            error_log('📝 Tentative update wt_start...');
-            $result = update_post_meta($product_id, 'wt_start', $start_timestamp);
-            error_log('  Résultat: ' . ($result ? 'SUCCESS' : 'FAILED/UNCHANGED'));
-            error_log('  Valeur: ' . $start_timestamp . ' (' . date('Y-m-d', $start_timestamp) . ')');
-        } else {
-            error_log('⏭️  wt_start: IGNORÉ (pas de start_date)');
+        if (!empty($availability_data['start_date'])) {
+            $start_timestamp = strtotime($availability_data['start_date']);
+            update_post_meta($product_id, 'wt_start', $start_timestamp);
+            update_post_meta($product_id, 'start_date', $start_timestamp);
+            error_log('📝 wt_start: ' . $start_timestamp . ' (' . $availability_data['start_date'] . ')');
         }
 
         // wt_expired - timestamp UNIX (expiration)
-        if (!empty($end_timestamp)) {
-            error_log('📝 Tentative update wt_expired...');
-            $result = update_post_meta($product_id, 'wt_expired', $end_timestamp);
-            error_log('  Résultat: ' . ($result ? 'SUCCESS' : 'FAILED/UNCHANGED'));
-            error_log('  Valeur: ' . $end_timestamp . ' (' . date('Y-m-d', $end_timestamp) . ')');
-        } else {
-            error_log('⏭️  wt_expired: IGNORÉ (pas de end_date)');
+        if (!empty($availability_data['end_date'])) {
+            $end_timestamp = strtotime($availability_data['end_date']);
+            update_post_meta($product_id, 'wt_expired', $end_timestamp);
+            update_post_meta($product_id, 'expired_date', $end_timestamp);
+            error_log('📝 wt_expired: ' . $end_timestamp . ' (' . $availability_data['end_date'] . ')');
         }
 
-        // wt_weekday - jours de la semaine (array autorisé pour ce champ)
-        if (!empty($availability_data['weekdays'])) {
-            error_log('📝 Tentative update wt_weekday...');
-
-            // Convertir nos jours (0=dimanche, 1=lundi) en format WooTours (2=lundi, 3=mardi)
+        // wt_weekday - jours de la semaine
+        if (!empty($availability_data['weekdays']) && is_array($availability_data['weekdays'])) {
             $wootour_weekdays = [];
             foreach ($availability_data['weekdays'] as $day) {
                 $wootour_day = $day + 1;
                 if ($wootour_day == 7) $wootour_day = 1;
                 $wootour_weekdays[] = $wootour_day;
             }
-
-            $result = update_post_meta($product_id, 'wt_weekday', $wootour_weekdays);
-            error_log('  Résultat: ' . ($result ? 'SUCCESS' : 'FAILED/UNCHANGED'));
-            error_log('  Valeur: ' . print_r($wootour_weekdays, true));
-        } else {
-            error_log('⏭️  wt_weekday: IGNORÉ (pas de weekdays)');
+            update_post_meta($product_id, 'wt_weekday', $wootour_weekdays);
+            error_log('📝 wt_weekday: ' . print_r($wootour_weekdays, true));
         }
 
-        error_log('');
-        error_log('═══════════════════════════════════════');
-        error_log('🔴 SECTION DATES D\'EXCLUSION');
-        error_log('═══════════════════════════════════════');
-
-        // === DATES D'EXCLUSION : UN SEUL TIMESTAMP ===
-
-        // Vérifier ce qu'on a reçu
-        if (isset($availability_data['exclusions'])) {
-            error_log('📥 Exclusions reçues:');
-            error_log('  Type: ' . gettype($availability_data['exclusions']));
-            error_log('  Valeur: ' . print_r($availability_data['exclusions'], true));
-            error_log('  Count: ' . (is_array($availability_data['exclusions']) ? count($availability_data['exclusions']) : 'N/A'));
-        } else {
-            error_log('❌ Exclusions: PAS DANS availability_data');
-        }
-        error_log('');
-
-        // Nettoyer d'abord les anciennes valeurs multiples
-        error_log('🧹 Nettoyage des anciennes métadonnées...');
-        delete_post_meta($product_id, 'wt_disabledate');
-        delete_post_meta($product_id, 'wt_disable_book');
-        error_log('  ✅ wt_disabledate et wt_disable_book supprimés');
-        error_log('');
-
-        if (!empty($availability_data['exclusions'])) {
-            error_log('📝 TRAITEMENT DES EXCLUSIONS...');
-
-            // Prendre UNIQUEMENT la première date d'exclusion
-            $first_exclusion = end($availability_data['exclusions']);
-            error_log('  Première exclusion: ' . $first_exclusion);
-
-            $timestamp = strtotime($first_exclusion);
-            error_log('  Timestamp: ' . $timestamp);
-
-            if ($timestamp) {
-                // wt_disabledate - UN SEUL timestamp
-                error_log('');
-                error_log('  ▶️  Mise à jour wt_disabledate...');
-
-                $result = update_post_meta($product_id, 'wt_disabledate', $timestamp);
-                error_log('    Résultat: ' . ($result ? '✅ SUCCESS' : '⚠️  FAILED/UNCHANGED'));
-                error_log('    Valeur: ' . $timestamp . ' (' . $first_exclusion . ')');
-
-                // Vérification immédiate
-                $verify = get_post_meta($product_id, 'wt_disabledate', true);
-                error_log('    Vérification: ' . ($verify ? $verify : 'VIDE'));
-                error_log('');
-
-                // wt_disable_book - Utiliser add_post_meta pour chaque date
-                error_log('  ▶️  Ajout de toutes les exclusions dans wt_disable_book...');
-                $count = 0;
-                foreach ($availability_data['exclusions'] as $date) {
-                    $ts = strtotime($date);
-                    if ($ts) {
-                        $result = add_post_meta($product_id, 'wt_disable_book', $ts);
-                        error_log('    add_post_meta wt_disable_book: ' . $ts . ' (' . $date . ') → ' . ($result ? '✅' : '❌'));
-                        $count++;
-                    }
-                }
-                error_log('  ✅ ' . $count . ' date(s) ajoutée(s) à wt_disable_book');
-
-                // Vérification immédiate
-                $verify_all = get_post_meta($product_id, 'wt_disable_book', false);
-                error_log('  Vérification wt_disable_book: ' . (is_array($verify_all) ? count($verify_all) . ' valeur(s)' : 'VIDE'));
-            } else {
-                error_log('  ❌ ÉCHEC: Impossible de convertir la date en timestamp');
-            }
-        } else {
-            error_log('⏭️  Exclusions: VIDE ou ABSENT - Aucune mise à jour');
-        }
-
-        error_log('');
-        error_log('═══════════════════════════════════════');
-        error_log('🟢 SECTION DATES SPÉCIFIQUES');
-        error_log('═══════════════════════════════════════');
-
-        // === DATES SPÉCIFIQUES : UN SEUL TIMESTAMP ===
-
-        // Vérifier ce qu'on a reçu
-        if (isset($availability_data['specific'])) {
-            error_log('📥 Dates spécifiques reçues:');
-            error_log('  Type: ' . gettype($availability_data['specific']));
-            error_log('  Valeur: ' . print_r($availability_data['specific'], true));
-            error_log('  Count: ' . (is_array($availability_data['specific']) ? count($availability_data['specific']) : 'N/A'));
-        } else {
-            error_log('❌ Dates spécifiques: PAS DANS availability_data');
-        }
-        error_log('');
-
-        // Nettoyer d'abord les anciennes valeurs
-        error_log('🧹 Nettoyage wt_customdate...');
-        delete_post_meta($product_id, 'wt_customdate');
-        error_log('  ✅ wt_customdate supprimé');
-        error_log('');
-
-        if (!empty($availability_data['specific'])) {
-            error_log('📝 TRAITEMENT DES DATES SPÉCIFIQUES...');
-
-            // Prendre UNIQUEMENT la première date spécifique
-            $first_specific = end($availability_data['specific']);
-            error_log('  Première date spécifique: ' . $first_specific);
-
-            $timestamp = strtotime($first_specific);
-            error_log('  Timestamp: ' . $timestamp);
-
-            if ($timestamp) {
-                // wt_customdate - UN SEUL timestamp
-                error_log('');
-                error_log('  ▶️  Mise à jour wt_customdate...');
-                $result = update_post_meta($product_id, 'wt_customdate', $timestamp);
-                error_log('    Résultat: ' . ($result ? '✅ SUCCESS' : '⚠️  FAILED/UNCHANGED'));
-                error_log('    Valeur: ' . $timestamp . ' (' . $first_specific . ')');
-
-                // Vérification immédiate
-                $verify = get_post_meta($product_id, 'wt_customdate', true);
-                error_log('    Vérification: ' . ($verify ? $verify . ' (' . date('Y-m-d', $verify) . ')' : 'VIDE'));
-            } else {
-                error_log('  ❌ ÉCHEC: Impossible de convertir la date en timestamp');
-            }
-        } else {
-            error_log('⏭️  Dates spécifiques: VIDE ou ABSENT - Aucune mise à jour');
-        }
-
-        error_log('');
-        error_log('═══════════════════════════════════════');
-        error_log('🔵 MÉTADONNÉES COMPLÉMENTAIRES');
-        error_log('═══════════════════════════════════════');
-
-        // === MÉTADONNÉES COMPLÉMENTAIRES (format string pour compatibilité) ===
-
+        // === 5. MÉTADONNÉES COMPLÉMENTAIRES ===
         if (!empty($availability_data['start_date'])) {
-            error_log('📝 _tour_start_date: ' . $availability_data['start_date']);
-            update_post_meta($product_id, '_tour_start_date', $availability_data['start_date']);
+            $start_timestamp = strtotime($availability_data['start_date']);
+
+            if ($start_timestamp !== false) {
+                update_post_meta($product_id, 'wt_start', $start_timestamp);
+                update_post_meta($product_id, 'start_date', $start_timestamp);
+            }
         }
 
         if (!empty($availability_data['end_date'])) {
-            error_log('📝 _tour_end_date: ' . $availability_data['end_date']);
-            update_post_meta($product_id, '_tour_end_date', $availability_data['end_date']);
+            $end_timestamp = strtotime($availability_data['end_date']);
 
-            error_log('📝 expired_date: ' . $availability_data['end_date']);
-            update_post_meta($product_id, 'expired_date', $availability_data['end_date']);
+            if ($end_timestamp !== false) {
+                update_post_meta($product_id, 'wt_expired', $end_timestamp);
+                update_post_meta($product_id, 'expired_date', $end_timestamp);
+            }
         }
 
+
         error_log('');
         error_log('████████████████████████████████████████');
-        error_log('🔵 updateWootourTimestampMeta() FIN');
+        error_log('✅ updateWootourTimestampMeta() TERMINÉ');
         error_log('████████████████████████████████████████');
+
+        return true;
+    }
+
+    /**
+     * Sauvegarder des dates dans une structure indexée (exc_mb-field-0, exc_mb-field-1, etc.)
+     * 
+     * ⚠️ CORRECTION CRITIQUE : WooTour attend des TIMESTAMPS UNIX (integers), pas des strings
+     */
+    private function saveIndexedDates(int $product_id, string $meta_key, array $dates, bool $delete_first = false): void
+    {
+        if ($delete_first) {
+            // Supprimer toutes les entrées existantes pour ce meta_key
+            delete_post_meta($product_id, $meta_key);
+            error_log('  🧹 ' . $meta_key . ': toutes les entrées supprimées');
+        }
+
+        if (empty($dates)) {
+            error_log('  ⏭️  ' . $meta_key . ': aucune date à sauvegarder');
+            return;
+        }
+
+        error_log('  💾 Sauvegarde de ' . count($dates) . ' date(s) dans ' . $meta_key . ':');
+
+        foreach ($dates as $index => $date) {
+            // ⚠️ CORRECTION CRITIQUE : Convertir en timestamp UNIX
+            if (is_string($date)) {
+                // Si c'est une string de date (YYYY-MM-DD ou MM/DD/YYYY)
+                $timestamp = strtotime($date);
+
+                if ($timestamp === false) {
+                    error_log('    ❌ ERREUR: Date invalide "' . $date . '" - ignorée');
+                    continue;
+                }
+            } elseif (is_numeric($date)) {
+                // Si c'est déjà un timestamp, le garder
+                $timestamp = (int) $date;
+            } else {
+                error_log('    ❌ ERREUR: Format de date inconnu - ignorée');
+                continue;
+            }
+
+            // Créer la clé indexée
+            $indexed_key = $meta_key . '[exc_mb-field-' . $index . ']';
+
+            // ✅ Sauvegarder le TIMESTAMP (integer)
+            $result = add_post_meta($product_id, $meta_key, $timestamp);
+
+            // Log détaillé
+            $log_line = '    ' . $indexed_key . ' = ' . $timestamp;
+            $log_line .= ' (' . date('Y-m-d', $timestamp) . ')';
+            $log_line .= $result ? ' ✅' : ' ❌ (échec ou doublon)';
+            error_log($log_line);
+        }
+
+        error_log('  ✅ ' . count($dates) . ' date(s) sauvegardée(s) en timestamps');
+    }
+
+    /**
+     * Récupérer les dates existantes pour un meta_key
+     * ⚠️ CORRECTION : Les dates sont stockées en timestamps, on les retourne en format lisible
+     */
+    private function getExistingDates(int $product_id, string $meta_key): array
+    {
+        $timestamps = get_post_meta($product_id, $meta_key, false);
+
+        if (empty($timestamps)) {
+            return [];
+        }
+
+        $dates = [];
+
+        foreach ($timestamps as $timestamp) {
+            if (empty($timestamp)) {
+                continue;
+            }
+
+            // Si c'est un timestamp, le convertir en date
+            if (is_numeric($timestamp)) {
+                $dates[] = date('Y-m-d', (int) $timestamp);
+            } else {
+                // Si c'est déjà une string, la garder mais la normaliser
+                $ts = strtotime($timestamp);
+                if ($ts !== false) {
+                    $dates[] = date('Y-m-d', $ts);
+                }
+            }
+        }
+
+        return array_unique(array_filter($dates));
+    }
+
+    /**
+     * DEBUG : Voir ce qui existe vraiment dans la base
+     */
+    private function debugExistingData(int $product_id): void
+    {
         error_log('');
-        
-         return true;
+        error_log('🔍 DEBUG STRUCTURE POUR PRODUIT #' . $product_id);
+        error_log('===========================================');
+
+        $meta_keys = ['wt_disable_book', 'wt_disabledate', 'wt_customdate'];
+
+        foreach ($meta_keys as $key) {
+            $values = get_post_meta($product_id, $key, false);
+            error_log($key . ':');
+            foreach ($values as $index => $value) {
+                error_log('  [' . $index . '] = ' . $value .
+                    ' (type: ' . gettype($value) .
+                    ', is_numeric: ' . (is_numeric($value) ? 'yes' : 'no') . ')');
+            }
+        }
+    }
+
+    /**
+     * Récupérer les dates indexées pour affichage/debug
+     */
+    public function getIndexedDates(int $product_id, string $meta_key): array
+    {
+        global $wpdb;
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT meta_value 
+        FROM {$wpdb->postmeta} 
+        WHERE post_id = %d 
+        AND meta_key = %s 
+        ORDER BY meta_id",
+            $product_id,
+            $meta_key
+        ), ARRAY_A);
+
+        $dates = [];
+        $index = 0;
+
+        foreach ($results as $row) {
+            $dates['exc_mb-field-' . $index] = $row['meta_value'];
+            $index++;
+        }
+
+        return $dates;
+    }
+
+    /**
+     * Vérifier la structure des données sauvegardées
+     */
+    public function verifySavedStructure(int $product_id): array
+    {
+        error_log('');
+        error_log('🔍 VÉRIFICATION STRUCTURE POUR PRODUIT #' . $product_id);
+        error_log('');
+
+        $structure = [
+            'wt_disable_book' => $this->getIndexedDates($product_id, 'wt_disable_book'),
+            'wt_disabledate' => $this->getIndexedDates($product_id, 'wt_disabledate'),
+            'wt_customdate' => $this->getIndexedDates($product_id, 'wt_customdate'),
+            'meta_keys' => [],
+        ];
+
+        // Récupérer toutes les meta_keys pour ce produit
+        global $wpdb;
+        $all_meta = $wpdb->get_results($wpdb->prepare(
+            "SELECT meta_key, meta_value 
+        FROM {$wpdb->postmeta} 
+        WHERE post_id = %d 
+        AND (meta_key LIKE '%wt_%' OR meta_key LIKE '%tour%' OR meta_key LIKE '%date%')
+        ORDER BY meta_key, meta_id",
+            $product_id
+        ), ARRAY_A);
+
+        foreach ($all_meta as $meta) {
+            $structure['meta_keys'][$meta['meta_key']][] = $meta['meta_value'];
+        }
+
+        error_log('Structure vérifiée:');
+        error_log(print_r($structure, true));
+
+        return $structure;
     }
 
     /**

@@ -551,7 +551,7 @@ final class AjaxController
         if (!empty($changes['specific']) && !empty($changes['exclusions'])) {
             $conflicts = array_intersect($changes['specific'], $changes['exclusions']);
             if (!empty($conflicts)) {
-                $formattedConflicts = array_map(function($date) {
+                $formattedConflicts = array_map(function ($date) {
                     return date('d/m/Y', strtotime($date));
                 }, $conflicts);
                 $errors[] = sprintf(
@@ -572,10 +572,11 @@ final class AjaxController
         $summary = [];
 
         // Vérifier si au moins une règle est définie
-        $hasRules = (!empty($changes['start_date']) && !empty($changes['end_date'])) ||
-                    !empty($changes['weekdays']) ||
-                    !empty($changes['specific']) ||
-                    !empty($changes['exclusions']);
+        $hasRules = (!empty($changes['start_date']) ||
+            !empty($changes['end_date'])) ||
+            !empty($changes['weekdays']) ||
+            !empty($changes['specific']) ||
+            !empty($changes['exclusions']);
 
         if (!$hasRules) {
             $summary['no_rules'] = true;
@@ -584,17 +585,33 @@ final class AjaxController
         }
 
         // Plage de dates
-        if (!empty($changes['start_date']) && !empty($changes['end_date'])) {
-            $startFr = date('d/m/Y', strtotime($changes['start_date']));
-            $endFr = date('d/m/Y', strtotime($changes['end_date']));
-            $days = floor((strtotime($changes['end_date']) - strtotime($changes['start_date'])) / (60 * 60 * 24)) + 1;
+        if (!empty($changes['start_date']) || !empty($changes['end_date'])) {
+            $startFr = !empty($changes['start_date'])
+                ? date('d/m/Y', strtotime($changes['start_date']))
+                : 'Non définie';
+            $endFr = !empty($changes['end_date'])
+                ? date('d/m/Y', strtotime($changes['end_date']))
+                : 'Non définie';
 
-            $summary['period'] = [
-                'start' => $startFr,
-                'end' => $endFr,
-                'days' => $days,
-                'text' => "Du $startFr au $endFr ($days jour" . ($days > 1 ? 's' : '') . ")"
-            ];
+            if (!empty($changes['start_date']) && !empty($changes['end_date'])) {
+                $days = floor((strtotime($changes['end_date']) - strtotime($changes['start_date'])) / (60 * 60 * 24)) + 1;
+                $summary['period'] = [
+                    'start' => $startFr,
+                    'end' => $endFr,
+                    'days' => $days,
+                    'text' => "Du $startFr au $endFr ($days jour" . ($days > 1 ? 's' : '') . ")"
+                ];
+            } elseif (!empty($changes['start_date'])) {
+                $summary['period'] = [
+                    'start' => $startFr,
+                    'text' => "À partir du $startFr"
+                ];
+            } else {
+                $summary['period'] = [
+                    'end' => $endFr,
+                    'text' => "Jusqu'au $endFr"
+                ];
+            }
         }
 
         // Jours de la semaine
@@ -708,7 +725,7 @@ final class AjaxController
         // Dates exclues: wt_disable_book et wt_disabledate
         $excluded_dates_1 = get_post_meta($product_id, 'wt_disable_book', true);
         $excluded_dates_2 = get_post_meta($product_id, 'wt_disabledate', true);
-        
+
         // Dates spéciales: wt_customdate
         $special_dates = get_post_meta($product_id, 'wt_customdate', true);
 
@@ -719,9 +736,9 @@ final class AjaxController
 
         // Parser les données selon le format WooTour
         $parsed_data = $this->parse_wootour_availability(
-            $availability_data, 
-            $excluded_dates_1, 
-            $excluded_dates_2, 
+            $availability_data,
+            $excluded_dates_1,
+            $excluded_dates_2,
             $special_dates,
             $product_id
         );
@@ -747,13 +764,12 @@ final class AjaxController
      * @return array Données parsées et formatées
      */
     private function parse_wootour_availability(
-        $availability_data, 
-        $excluded_dates_1 = null, 
-        $excluded_dates_2 = null, 
+        $availability_data,
+        $excluded_dates_1 = null,
+        $excluded_dates_2 = null,
         $special_dates = null,
         $product_id = 0
-    ): array
-    {
+    ): array {
         $result = [
             'start_date' => '',
             'end_date' => '',
@@ -794,9 +810,9 @@ final class AjaxController
             $unserialized = @unserialize($availability_data);
             if (is_array($unserialized)) {
                 return $this->parse_wootour_availability(
-                    $unserialized, 
-                    $excluded_dates_1, 
-                    $excluded_dates_2, 
+                    $unserialized,
+                    $excluded_dates_1,
+                    $excluded_dates_2,
                     $special_dates,
                     $product_id
                 );
@@ -874,7 +890,7 @@ final class AjaxController
             if (is_array($unserialized)) {
                 return $this->parse_wootour_date_meta($unserialized, $meta_key, $product_id);
             }
-            
+
             // Sinon, essayer de parser comme une date unique
             $normalized = $this->normalize_date($meta_value);
             if ($normalized) {
@@ -1027,6 +1043,7 @@ final class AjaxController
 
     /**
      * Parse changes from request
+     * VERSION MODIFIÉE : Permet de choisir date de début OU date de fin indépendamment
      */
     private function parse_changes(): array
     {
@@ -1034,9 +1051,9 @@ final class AjaxController
 
         error_log('[WBE AjaxController] === START parse_changes ===');
         error_log('[WBE AjaxController] RAW REQUEST: ' . print_r($_REQUEST, true));
+
         // Parse each field with sanitization
         $fields = ['start_date', 'end_date', 'weekdays', 'exclusions', 'specific'];
-        
 
         foreach ($fields as $field) {
             if (isset($_REQUEST[$field])) {
@@ -1131,10 +1148,58 @@ final class AjaxController
 
         error_log('[WBE AjaxController] Final parsed changes: ' . print_r($changes, true));
 
-        // VALIDATION DES DATES (only if both are provided)
-        if (isset($changes['start_date']) && isset($changes['end_date']) && 
-            !empty($changes['start_date']) && !empty($changes['end_date'])) {
+        // ✅ VALIDATION : Aucune date ne peut être antérieure à aujourd'hui
+        $today = date('Y-m-d');
+
+        // Valider date de début si présente
+        if (isset($changes['start_date']) && !empty($changes['start_date'])) {
+            if ($changes['start_date'] < $today) {
+                throw new ValidationException(
+                    sprintf(
+                        'La date de début (%s) ne peut pas être antérieure à aujourd\'hui (%s).',
+                        date('d/m/Y', strtotime($changes['start_date'])),
+                        date('d/m/Y', strtotime($today))
+                    )
+                );
+            }
+            error_log('[WBE AjaxController] Start date validated: ' . $changes['start_date']);
+        }
+
+        // Valider date de fin si présente
+        if (isset($changes['end_date']) && !empty($changes['end_date'])) {
+            if ($changes['end_date'] < $today) {
+                throw new ValidationException(
+                    sprintf(
+                        'La date de fin (%s) ne peut pas être antérieure à aujourd\'hui (%s).',
+                        date('d/m/Y', strtotime($changes['end_date'])),
+                        date('d/m/Y', strtotime($today))
+                    )
+                );
+            }
+            error_log('[WBE AjaxController] End date validated: ' . $changes['end_date']);
+        }
+
+        // ✅ VALIDATION DE COHÉRENCE : uniquement si les DEUX dates sont présentes
+        // Permet maintenant de choisir :
+        // - Uniquement date de début (sans date de fin)
+        // - Uniquement date de fin (sans date de début)
+        // - Les deux dates (avec validation de cohérence)
+        if (
+            isset($changes['start_date']) && isset($changes['end_date']) &&
+            !empty($changes['start_date']) && !empty($changes['end_date'])
+        ) {
+
+            error_log('[WBE AjaxController] Both dates present - validating range');
             $this->validate_date_range($changes['start_date'], $changes['end_date']);
+        } elseif (isset($changes['start_date']) && !empty($changes['start_date'])) {
+
+            error_log('[WBE AjaxController] Only start_date present: ' . $changes['start_date']);
+        } elseif (isset($changes['end_date']) && !empty($changes['end_date'])) {
+
+            error_log('[WBE AjaxController] Only end_date present: ' . $changes['end_date']);
+        } else {
+
+            error_log('[WBE AjaxController] No dates provided (both empty or not set)');
         }
 
         // VALIDATION DES CONFLITS (specific vs exclusion dates)
@@ -1155,6 +1220,48 @@ final class AjaxController
                     )
                 );
             }
+        }
+
+        // ✅ VALIDATION : Dates spécifiques ne peuvent pas être dans le passé
+        if (!empty($changes['specific'])) {
+            $past_dates = [];
+            foreach ($changes['specific'] as $date) {
+                if ($date < $today) {
+                    $past_dates[] = date('d/m/Y', strtotime($date));
+                }
+            }
+
+            if (!empty($past_dates)) {
+                throw new ValidationException(
+                    sprintf(
+                        'Les dates spécifiques suivantes sont dans le passé : %s. Veuillez sélectionner uniquement des dates futures.',
+                        implode(', ', $past_dates)
+                    )
+                );
+            }
+
+            error_log('[WBE AjaxController] Specific dates validated: ' . count($changes['specific']) . ' dates');
+        }
+
+        // ✅ VALIDATION : Dates d'exclusion ne peuvent pas être dans le passé
+        if (!empty($changes['exclusions'])) {
+            $past_dates = [];
+            foreach ($changes['exclusions'] as $date) {
+                if ($date < $today) {
+                    $past_dates[] = date('d/m/Y', strtotime($date));
+                }
+            }
+
+            if (!empty($past_dates)) {
+                throw new ValidationException(
+                    sprintf(
+                        'Les dates d\'exclusion suivantes sont dans le passé : %s. Veuillez sélectionner uniquement des dates futures.',
+                        implode(', ', $past_dates)
+                    )
+                );
+            }
+
+            error_log('[WBE AjaxController] Exclusion dates validated: ' . count($changes['exclusions']) . ' dates');
         }
 
         error_log('[WBE AjaxController] === END parse_changes (validation passed) ===');
