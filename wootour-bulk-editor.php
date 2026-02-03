@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Wootour Edition de masses
  * Description: Bulk edit availability for Wootour products without overwriting existing data
- * Version:     2.1.3
+ * Version:     2.1.4
  * Author:      Intinct Vertical
  * License:     GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html

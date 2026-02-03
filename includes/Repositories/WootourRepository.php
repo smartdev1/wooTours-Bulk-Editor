@@ -734,6 +734,133 @@ final class WootourRepository implements RepositoryInterface
         wp_cache_delete($product_id, 'post_meta');
     }
 
+    public function resetAvailability(int $product_id): bool
+    {
+        error_log('');
+        error_log('████████████████████████████████████████');
+        error_log('🔴 RESET AVAILABILITY FOR PRODUCT #' . $product_id);
+        error_log('████████████████████████████████████████');
+
+        try {
+            // Liste complète des meta_keys à supprimer
+            $meta_keys_to_delete = [
+                // Métadonnées principales
+                '_wootour_availability',
+
+                // Dates
+                'wt_start',
+                'start_date',
+                'wt_expired',
+                'expired_date',
+
+                // Jours de la semaine
+                'wt_weekday',
+
+                // Dates d'exclusion
+                'wt_disable_book',
+                'wt_disabledate',
+
+                // Dates spécifiques
+                'wt_customdate',
+
+                // Autres métadonnées WooTour potentielles
+                'wt_booking_type',
+                'wt_duration',
+                'wt_max_people',
+            ];
+
+            $deleted_count = 0;
+
+            foreach ($meta_keys_to_delete as $meta_key) {
+                $result = delete_post_meta($product_id, $meta_key);
+
+                if ($result) {
+                    $deleted_count++;
+                    error_log('  ✅ Deleted: ' . $meta_key);
+                } else {
+                    // Vérifier si la meta_key existait
+                    $existing = get_post_meta($product_id, $meta_key, false);
+                    if (!empty($existing)) {
+                        error_log('  ⚠️  Failed to delete: ' . $meta_key . ' (existed but deletion failed)');
+                    } else {
+                        error_log('  ℹ️  Skipped: ' . $meta_key . ' (did not exist)');
+                    }
+                }
+            }
+
+            error_log('');
+            error_log('📊 RESET SUMMARY:');
+            error_log('  - Total meta_keys checked: ' . count($meta_keys_to_delete));
+            error_log('  - Successfully deleted: ' . $deleted_count);
+            error_log('');
+
+            // Vider TOUS les caches
+            $this->clearAllCaches($product_id);
+
+            error_log('✅ RESET COMPLETED FOR PRODUCT #' . $product_id);
+            error_log('████████████████████████████████████████');
+            error_log('');
+
+            return true;
+        } catch (\Exception $e) {
+            error_log('❌ RESET FAILED: ' . $e->getMessage());
+            error_log('████████████████████████████████████████');
+            error_log('');
+            return false;
+        }
+    }
+
+    /**
+     * Réinitialiser plusieurs produits en batch
+     * 
+     * @param array $product_ids Array of product IDs
+     * @return array Results with success and failed products
+     */
+    public function resetAvailabilityBatch(array $product_ids): array
+    {
+        error_log('');
+        error_log('═══════════════════════════════════════');
+        error_log('🔴 BATCH RESET FOR ' . count($product_ids) . ' PRODUCTS');
+        error_log('═══════════════════════════════════════');
+
+        $results = [
+            'success' => [],
+            'failed' => [],
+            'total' => count($product_ids),
+        ];
+
+        foreach ($product_ids as $product_id) {
+            try {
+                $success = $this->resetAvailability($product_id);
+
+                if ($success) {
+                    $results['success'][] = $product_id;
+                } else {
+                    $results['failed'][] = [
+                        'product_id' => $product_id,
+                        'error' => 'Reset failed'
+                    ];
+                }
+            } catch (\Exception $e) {
+                $results['failed'][] = [
+                    'product_id' => $product_id,
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+
+        error_log('');
+        error_log('📊 BATCH RESET RESULTS:');
+        error_log('  - Total products: ' . $results['total']);
+        error_log('  - Successfully reset: ' . count($results['success']));
+        error_log('  - Failed: ' . count($results['failed']));
+        error_log('═══════════════════════════════════════');
+        error_log('');
+
+        return $results;
+    }
+
+
     /**
      * Get detected meta key
      */

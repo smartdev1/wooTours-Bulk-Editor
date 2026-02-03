@@ -371,8 +371,6 @@ class AdminController
                             </div>
                         </div>
 
-                        <!-- ... Code existant ... -->
-
                         <div class="wbe-section">
                             <h3><?php _e('Dates Spécifiques', Constants::TEXT_DOMAIN); ?></h3>
 
@@ -419,6 +417,29 @@ class AdminController
                                     <?php _e('Tout Effacer', Constants::TEXT_DOMAIN); ?>
                                 </button>
                             </div>
+                        </div>
+
+                        <!-- NOUVELLE SECTION: Réinitialisation complète -->
+                        <div class="wbe-section wbe-reset-section" style="margin-top: 30px; padding-top: 30px; border-top: 2px solid #ddd;">
+                            <h3 style="color: #d63638;">
+                                <span class="dashicons dashicons-warning" style="color: #d63638;"></span>
+                                <?php _e('Zone Dangereuse', Constants::TEXT_DOMAIN); ?>
+                            </h3>
+
+                            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 10px 0; border-radius: 4px;">
+                                <p style="margin: 0 0 10px 0;">
+                                    <strong><?php _e('⚠️ Attention:', Constants::TEXT_DOMAIN); ?></strong>
+                                    <?php _e('Cette action va effacer TOUTES les configurations de disponibilité des produits sélectionnés.', Constants::TEXT_DOMAIN); ?>
+                                </p>
+                                <p style="margin: 0; font-size: 13px; color: #856404;">
+                                    <?php _e('Cela inclut : plage de dates, jours de la semaine, dates spécifiques et exclusions.', Constants::TEXT_DOMAIN); ?>
+                                </p>
+                            </div>
+
+                            <button type="button" id="wbe-reset-all" class="button button-large" style="background: #d63638; color: white; border-color: #d63638;">
+                                <span class="dashicons dashicons-trash" style="margin-top: 3px;"></span>
+                                <?php _e('Réinitialiser toutes les dates', Constants::TEXT_DOMAIN); ?>
+                            </button>
                         </div>
                     </div>
                 </div>

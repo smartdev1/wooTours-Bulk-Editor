@@ -31,6 +31,7 @@ use WootourBulkEditor\Services\LoggerService;
 use WootourBulkEditor\Controllers\ProductController;
 use WootourBulkEditor\Exceptions\BatchException;
 use WootourBulkEditor\Traits\Singleton;
+use WootourBulkEditor\Repositories\WootourRepository;
 
 // Exit if accessed directly
 defined('ABSPATH') || exit;
@@ -60,6 +61,16 @@ final class AjaxController
     private $product_repository;
 
     /**
+     * @var LoggerService
+     */
+    private $logger_service;
+
+    /**
+     * @var WootourRepository
+     */
+    private $wootour_repository;
+
+    /**
      * @var AvailabilityService
      */
     private $availability_service;
@@ -82,6 +93,9 @@ final class AjaxController
         $this->product_repository = ProductRepository::getInstance();
         $this->availability_service = AvailabilityService::getInstance();
 
+        $this->wootour_repository = WootourRepository::getInstance();
+        $this->logger_service = LoggerService::getInstance();
+
         // Register AJAX actions
         foreach (Constants::AJAX_ACTIONS as $action) {
             add_action("wp_ajax_{$action}", [$this, 'handle_ajax_request']);
@@ -89,7 +103,106 @@ final class AjaxController
 
         // Block unauthorized access
         add_action('wp_ajax_nopriv_wbe_', [$this, 'handle_unauthorized_access']);
+        add_action('wp_ajax_wbe_reset_products', [$this, 'handle_reset_products']);
     }
+
+    /**
+     * Handle: Reset products availability
+     * 
+     * @since 1.0.0
+     */
+    public function handle_reset_products(): void
+    {
+        try {
+            error_log('[WBE] === RESET PRODUCTS REQUEST ===');
+
+            $this->validate_ajax_request();
+            $product_ids = $this->parse_product_ids();
+
+            if (empty($product_ids)) {
+                throw new ValidationException('Aucun produit sélectionné pour la réinitialisation.');
+            }
+
+            $max_products = apply_filters('wbe_max_reset_products', 500);
+            if (count($product_ids) > $max_products) {
+                throw new ValidationException(
+                    sprintf('Trop de produits (%d). Maximum : %d.', count($product_ids), $max_products)
+                );
+            }
+
+            $results = $this->wootour_repository->resetAvailabilityBatch($product_ids);
+
+            $success_count = count($results['success']);
+            $failed_count = count($results['failed']);
+            $total = $results['total'];
+
+            // ✅ CORRECTION : Utiliser getInstance()
+            $logger = \WootourBulkEditor\Services\LoggerService::getInstance();
+
+            $logger->log(
+                'batch_reset',
+                sprintf('Reset: %d/%d produits réinitialisés', $success_count, $total),
+                [
+                    'operation_id'   => 'reset_' . time(),
+                    'product_ids'    => $product_ids,
+                    'product_count'  => $total,
+                    'success_count'  => $success_count,
+                    'failed_count'   => $failed_count,
+                    'user_id'        => get_current_user_id(),
+                ],
+                'info'
+            );
+
+            $this->send_success_response([
+                'data' => [
+                    'operation_id'    => 'reset_' . time(),
+                    'total_products'  => $total,
+                    'success_count'   => $success_count,
+                    'failed_count'    => $failed_count,
+                    'success_ids'     => $results['success'],
+                    'failed_details'  => $results['failed'],
+                    'timestamp'       => time(),
+                ],
+                'message' => sprintf(
+                    '%d/%d produit(s) réinitialisé(s) avec succès',
+                    $success_count,
+                    $total
+                )
+            ]);
+        } catch (ValidationException $e) {
+            // ✅ CORRECTION : Utiliser getInstance()
+            $logger = \WootourBulkEditor\Services\LoggerService::getInstance();
+
+            $logger->log(
+                'reset_validation_error',
+                'Validation reset échouée: ' . $e->getMessage(),
+                ['error' => $e->getMessage(), 'user_id' => get_current_user_id()],
+                'warning'
+            );
+
+            $this->send_error_response($e->getMessage(), 400, ['type' => 'validation_error']);
+        } catch (\Exception $e) {
+            error_log('[WBE] Reset error: ' . $e->getMessage());
+
+            // ✅ CORRECTION : Utiliser getInstance()
+            $logger = \WootourBulkEditor\Services\LoggerService::getInstance();
+
+            $logger->log(
+                'reset_error',
+                'Reset échoué: ' . $e->getMessage(),
+                ['error' => $e->getMessage(), 'user_id' => get_current_user_id()],
+                'error'
+            );
+
+            $this->send_error_response(
+                'Une erreur est survenue lors de la réinitialisation.',
+                500,
+                ['type' => 'reset_error']
+            );
+        }
+    }
+
+
 
     /**
      * Main AJAX request handler
@@ -1052,7 +1165,22 @@ final class AjaxController
         error_log('[WBE AjaxController] === START parse_changes ===');
         error_log('[WBE AjaxController] RAW REQUEST: ' . print_r($_REQUEST, true));
 
-        // Parse each field with sanitization
+        // ✅ NOUVEAU: Vérifier le mode reset
+        if (isset($_REQUEST['reset_all']) && $_REQUEST['reset_all'] === 'true') {
+            error_log('[WBE AjaxController] 🔴 RESET MODE ACTIVATED');
+
+            // En mode reset, retourner un tableau avec le flag reset
+            return [
+                'reset_all' => true,
+                'start_date' => '',
+                'end_date' => '',
+                'weekdays' => [],
+                'specific' => [],
+                'exclusions' => []
+            ];
+        }
+
+        // Parse each field with sanitization (code existant)
         $fields = ['start_date', 'end_date', 'weekdays', 'exclusions', 'specific'];
 
         foreach ($fields as $field) {
@@ -1060,9 +1188,7 @@ final class AjaxController
                 $value = $_REQUEST[$field];
 
                 if (is_array($value)) {
-                    // Array fields (weekdays as checkboxes)
                     if ($field === 'weekdays') {
-                        // Weekdays come as ['monday' => 'on', 'tuesday' => 'on']
                         $weekday_indices = [];
                         $weekday_map = [
                             'sunday' => 0,
@@ -1083,38 +1209,29 @@ final class AjaxController
                         $changes[$field] = $weekday_indices;
                         error_log('[WBE AjaxController] Parsed weekdays: ' . print_r($weekday_indices, true));
                     } else {
-                        // Other arrays (exclusions, specific dates)
                         $changes[$field] = array_map('sanitize_text_field', $value);
                     }
                 } elseif (is_string($value)) {
-                    // Convert date formats
                     if ($field === 'start_date' || $field === 'end_date') {
                         error_log('[WBE AjaxController] Raw date value for ' . $field . ': ' . $value);
 
-                        // Check if already YYYY-MM-DD
                         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
                             $changes[$field] = sanitize_text_field($value);
                             error_log('[WBE AjaxController] Date already YYYY-MM-DD: ' . $value);
-                        }
-                        // Check if DD/MM/YYYY format
-                        elseif (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $value, $matches)) {
-                            // Convert DD/MM/YYYY to YYYY-MM-DD
+                        } elseif (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $value, $matches)) {
                             $converted_date = sprintf(
                                 '%04d-%02d-%02d',
-                                $matches[3], // year
-                                $matches[2], // month  
-                                $matches[1]  // day
+                                $matches[3],
+                                $matches[2],
+                                $matches[1]
                             );
                             $changes[$field] = sanitize_text_field($converted_date);
                             error_log('[WBE AjaxController] Converted date ' . $field . ': ' . $value . ' → ' . $converted_date);
                         } else {
-                            // Unknown format, leave as is (will be rejected by validation)
                             $changes[$field] = sanitize_text_field($value);
                             error_log('[WBE AjaxController] Unknown date format: ' . $value);
                         }
-                    }
-                    // String fields for weekdays (comma-separated)
-                    elseif ($field === 'weekdays') {
+                    } elseif ($field === 'weekdays') {
                         $changes[$field] = array_map('intval', explode(',', $value));
                     } else {
                         $changes[$field] = sanitize_text_field($value);
@@ -1123,7 +1240,7 @@ final class AjaxController
             }
         }
 
-        // Process specific and exclusion dates (which may come as strings)
+        // Process specific and exclusion dates
         foreach (['specific', 'exclusions'] as $date_field) {
             if (isset($changes[$date_field]) && is_string($changes[$date_field])) {
                 $dates = explode(',', $changes[$date_field]);
@@ -1133,7 +1250,6 @@ final class AjaxController
                     $date = trim($date);
                     if (empty($date)) continue;
 
-                    // Convert DD/MM/YYYY to YYYY-MM-DD if necessary
                     if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $date, $matches)) {
                         $converted_date = sprintf('%04d-%02d-%02d', $matches[3], $matches[2], $matches[1]);
                         $converted_dates[] = $converted_date;
@@ -1148,10 +1264,9 @@ final class AjaxController
 
         error_log('[WBE AjaxController] Final parsed changes: ' . print_r($changes, true));
 
-        // ✅ VALIDATION : Aucune date ne peut être antérieure à aujourd'hui
+        // Validations (seulement si pas en mode reset)
         $today = date('Y-m-d');
 
-        // Valider date de début si présente
         if (isset($changes['start_date']) && !empty($changes['start_date'])) {
             if ($changes['start_date'] < $today) {
                 throw new ValidationException(
@@ -1162,10 +1277,8 @@ final class AjaxController
                     )
                 );
             }
-            error_log('[WBE AjaxController] Start date validated: ' . $changes['start_date']);
         }
 
-        // Valider date de fin si présente
         if (isset($changes['end_date']) && !empty($changes['end_date'])) {
             if ($changes['end_date'] < $today) {
                 throw new ValidationException(
@@ -1176,38 +1289,17 @@ final class AjaxController
                     )
                 );
             }
-            error_log('[WBE AjaxController] End date validated: ' . $changes['end_date']);
         }
 
-        // ✅ VALIDATION DE COHÉRENCE : uniquement si les DEUX dates sont présentes
-        // Permet maintenant de choisir :
-        // - Uniquement date de début (sans date de fin)
-        // - Uniquement date de fin (sans date de début)
-        // - Les deux dates (avec validation de cohérence)
         if (
             isset($changes['start_date']) && isset($changes['end_date']) &&
             !empty($changes['start_date']) && !empty($changes['end_date'])
         ) {
-
-            error_log('[WBE AjaxController] Both dates present - validating range');
             $this->validate_date_range($changes['start_date'], $changes['end_date']);
-        } elseif (isset($changes['start_date']) && !empty($changes['start_date'])) {
-
-            error_log('[WBE AjaxController] Only start_date present: ' . $changes['start_date']);
-        } elseif (isset($changes['end_date']) && !empty($changes['end_date'])) {
-
-            error_log('[WBE AjaxController] Only end_date present: ' . $changes['end_date']);
-        } else {
-
-            error_log('[WBE AjaxController] No dates provided (both empty or not set)');
         }
 
-        // VALIDATION DES CONFLITS (specific vs exclusion dates)
         if (!empty($changes['specific']) && !empty($changes['exclusions'])) {
-            $specific_dates = $changes['specific'];
-            $exclusion_dates = $changes['exclusions'];
-
-            $conflicts = array_intersect($specific_dates, $exclusion_dates);
+            $conflicts = array_intersect($changes['specific'], $changes['exclusions']);
             if (!empty($conflicts)) {
                 $conflict_dates = array_map(function ($date) {
                     return date('d/m/Y', strtotime($date));
@@ -1222,7 +1314,6 @@ final class AjaxController
             }
         }
 
-        // ✅ VALIDATION : Dates spécifiques ne peuvent pas être dans le passé
         if (!empty($changes['specific'])) {
             $past_dates = [];
             foreach ($changes['specific'] as $date) {
@@ -1234,16 +1325,13 @@ final class AjaxController
             if (!empty($past_dates)) {
                 throw new ValidationException(
                     sprintf(
-                        'Les dates spécifiques suivantes sont dans le passé : %s. Veuillez sélectionner uniquement des dates futures.',
+                        'Les dates spécifiques suivantes sont dans le passé : %s.',
                         implode(', ', $past_dates)
                     )
                 );
             }
-
-            error_log('[WBE AjaxController] Specific dates validated: ' . count($changes['specific']) . ' dates');
         }
 
-        // ✅ VALIDATION : Dates d'exclusion ne peuvent pas être dans le passé
         if (!empty($changes['exclusions'])) {
             $past_dates = [];
             foreach ($changes['exclusions'] as $date) {
@@ -1255,19 +1343,18 @@ final class AjaxController
             if (!empty($past_dates)) {
                 throw new ValidationException(
                     sprintf(
-                        'Les dates d\'exclusion suivantes sont dans le passé : %s. Veuillez sélectionner uniquement des dates futures.',
+                        'Les dates d\'exclusion suivantes sont dans le passé : %s.',
                         implode(', ', $past_dates)
                     )
                 );
             }
-
-            error_log('[WBE AjaxController] Exclusion dates validated: ' . count($changes['exclusions']) . ' dates');
         }
 
-        error_log('[WBE AjaxController] === END parse_changes (validation passed) ===');
+        error_log('[WBE AjaxController] === END parse_changes ===');
 
         return $changes;
     }
+
 
     /**
      * Validate date range
