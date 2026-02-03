@@ -26,10 +26,8 @@
      * Initialize
      */
     init: function () {
-      console.log("WBE Admin initializing...");
 
       if (typeof wbe_admin_data === "undefined") {
-        console.error("wbe_admin_data not found");
         return;
       }
 
@@ -89,7 +87,6 @@ Cette action est IRRÉVERSIBLE.
 Voulez-vous vraiment continuer ?`;
 
       if (!confirm(confirmMessage)) {
-        console.log("❌ Réinitialisation annulée par l'utilisateur");
         return;
       }
 
@@ -99,11 +96,9 @@ Voulez-vous vraiment continuer ?`;
       );
 
       if (!doubleConfirm) {
-        console.log("❌ Réinitialisation annulée (double confirmation)");
         return;
       }
 
-      console.log("✅ Réinitialisation confirmée par l'utilisateur");
 
       // Activer le mode reset
       resetMode = true;
@@ -125,11 +120,7 @@ Voulez-vous vraiment continuer ?`;
       );
     },
 
-    /**
-     * NOUVEAU: Effacer tous les champs du formulaire
-     */
     clearAllFormFields: function () {
-      console.log("🧹 Effacement de tous les champs du formulaire");
 
       // Effacer les dates
       $("#wbe-start-date").val("");
@@ -151,8 +142,6 @@ Voulez-vous vraiment continuer ?`;
       this.formData.weekdays = [];
       this.formData.specific_dates = [];
       this.formData.exclusions = [];
-
-      console.log("✅ Tous les champs effacés");
     },
 
     /**
@@ -679,7 +668,6 @@ Voulez-vous vraiment continuer ?`;
      */
     setupDatepickers: function () {
       if (!$.fn.datepicker) {
-        console.warn("jQuery UI Datepicker not loaded");
         return;
       }
 
@@ -779,7 +767,6 @@ Voulez-vous vraiment continuer ?`;
           }
         },
         error: function (xhr, status, error) {
-          console.error("AJAX Error:", { status, error, xhr });
 
           let errorMsg = "Erreur serveur lors du chargement des produits";
 
@@ -855,7 +842,6 @@ Voulez-vous vraiment continuer ?`;
           }
         },
         error: function (xhr, status, error) {
-          console.error("Search Error:", { status, error, xhr });
 
           let errorMsg = "Erreur lors de la recherche";
 
@@ -1068,9 +1054,6 @@ Voulez-vous vraiment continuer ?`;
         debug: true,
         timestamp: Date.now(),
       };
-      console.log('Current mode - Reset:', resetMode, '| Normal:', !resetMode);
-console.log('AJAX action:', ajaxData.action);
-console.log('Product IDs to process:', ajaxData.product_ids);
       if (this.selectedProducts.length === 0) {
         this.showToast("Erreur", "Aucun produit sélectionné.", "error");
         return;
@@ -1100,22 +1083,12 @@ console.log('Product IDs to process:', ajaxData.product_ids);
           $progressText.text(`⏳ Application en cours... (${elapsed}s)`);
         }
       }, 1000);
-
-      // ✅ MODIFICATION PRINCIPALE : Préparer les données selon le mode
-      
-
-      // ✅ MODE RESET : Action AJAX dédiée (OPTION A - RECOMMANDÉ)
       if (resetMode) {
-        console.log("🔴 RESET MODE: Using dedicated AJAX action");
 
-        ajaxData.action = "wbe_reset_products"; // ← Action spécifique
-
-        // Pas besoin d'envoyer les champs de formulaire
-        // Seulement les product_ids
+        ajaxData.action = "wbe_reset_products"; 
       }
       // MODE NORMAL : Action batch standard
       else {
-        console.log("✅ NORMAL MODE: Using batch process");
 
         ajaxData.action =
           wbe_admin_data.ajax_actions?.process_batch || "wbe_process_batch";
@@ -1135,10 +1108,6 @@ console.log('Product IDs to process:', ajaxData.product_ids);
         ajaxData.specific = specificDates;
         ajaxData.exclusions = exclusionDates;
       }
-
-      console.log("📤 Données envoyées au serveur:", ajaxData);
-
-      // ✅ REQUÊTE AJAX
       $.ajax({
         url: wbe_admin_data.ajax_url,
         type: "POST",
@@ -1146,8 +1115,6 @@ console.log('Product IDs to process:', ajaxData.product_ids);
         success: function (response) {
           clearInterval(updateTimer);
           const elapsed = Math.floor((Date.now() - startTime) / 1000);
-
-          console.log("📥 Réponse du serveur:", response);
 
           if (response.success) {
             $progressFill.css("width", "100%");
@@ -1204,7 +1171,6 @@ console.log('Product IDs to process:', ajaxData.product_ids);
 
         error: function (xhr, status, error) {
           clearInterval(updateTimer);
-          console.error("AJAX Error:", { status, error, xhr });
 
           let errorMsg = "Erreur serveur";
 
@@ -1230,9 +1196,6 @@ console.log('Product IDs to process:', ajaxData.product_ids);
 
     handleResetAll: function () {
       const self = this;
-      console.log("🔴 RESET MODE ACTIVATED");
-      console.log("Selected products:", this.selectedProducts);
-      console.log("Form data before reset:", this.formData);
       // Vérifier qu'il y a des produits sélectionnés
       if (self.selectedProducts.length === 0) {
         self.showToast(
@@ -1259,7 +1222,6 @@ Cette action est IRRÉVERSIBLE.
 Voulez-vous vraiment continuer ?`;
 
       if (!confirm(confirmMessage)) {
-        console.log("❌ Réinitialisation annulée par l'utilisateur");
         return;
       }
 
@@ -1269,12 +1231,8 @@ Voulez-vous vraiment continuer ?`;
       );
 
       if (!doubleConfirm) {
-        console.log("❌ Réinitialisation annulée (double confirmation)");
         return;
       }
-
-      console.log("✅ Réinitialisation confirmée par l'utilisateur");
-      console.log("🔴 Activation du mode RESET");
 
       // Activer le mode reset
       resetMode = true;

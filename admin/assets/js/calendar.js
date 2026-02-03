@@ -362,7 +362,6 @@
      */
     $(document).ready(function() {
         if (!$.datepicker) {
-            console.error('jQuery UI Datepicker n\'est pas disponible');
             return;
         }
         

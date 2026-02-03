@@ -463,7 +463,6 @@ if (!defined('ABSPATH')) {
             navigator.clipboard.writeText(detailsText).then(() => {
                 this.showNotification('Détails copiés dans le presse-papier.', 'success');
             }).catch(err => {
-                console.error('Erreur lors de la copie :', err);
                 this.showNotification('Impossible de copier les détails.', 'error');
             });
         }
@@ -532,7 +531,6 @@ if (!defined('ABSPATH')) {
                     this.errorLog = JSON.parse(stored);
                 }
             } catch (e) {
-                console.warn('Impossible de charger le log d\'erreurs :', e);
                 this.errorLog = [];
             }
         }
