@@ -1,0 +1,369 @@
+/**
+ * Styles pour la sélection par catégories et produits
+ */
+
+/* ============================================
+   CATÉGORIES SÉLECTIONNÉES
+   ============================================ */
+
+#wbe-selected-categories-wrapper {
+    margin-top: 25px;
+    animation: slideDown 0.3s ease;
+}
+
+#wbe-categories-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.wbe-category-item {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.wbe-category-item:hover {
+    border-color: #2271b1;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* En-tête de catégorie */
+.wbe-category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: linear-gradient(135deg, #f6f7f7 0%, #fff 100%);
+    border-bottom: 1px solid #dcdcde;
+}
+
+.wbe-category-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.wbe-category-info .dashicons {
+    color: #2271b1;
+    font-size: 20px;
+}
+
+.wbe-category-info strong {
+    font-size: 15px;
+    color: #1d2327;
+}
+
+.wbe-product-count {
+    color: #646970;
+    font-size: 13px;
+}
+
+.wbe-remove-category {
+    color: #d63638;
+    padding: 4px;
+    transition: all 0.2s ease;
+}
+
+.wbe-remove-category:hover {
+    color: #b32d2e;
+    transform: scale(1.1);
+}
+
+/* ============================================
+   MODE DE SÉLECTION DES PRODUITS
+   ============================================ */
+
+.wbe-category-products {
+    padding: 20px;
+}
+
+.wbe-product-selection-mode {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.wbe-selection-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 15px;
+    background: #f6f7f7;
+    border: 2px solid #dcdcde;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.wbe-selection-option:hover {
+    background: #fff;
+    border-color: #2271b1;
+}
+
+.wbe-selection-option input[type="radio"] {
+    margin: 0;
+}
+
+.wbe-selection-option input[type="radio"]:checked + .dashicons {
+    color: #2271b1;
+}
+
+.wbe-selection-option input[type="radio"]:checked ~ strong {
+    color: #2271b1;
+}
+
+.wbe-selection-option .dashicons {
+    font-size: 20px;
+    color: #646970;
+    transition: color 0.2s ease;
+}
+
+.wbe-selection-option strong {
+    font-size: 14px;
+    color: #1d2327;
+    display: block;
+}
+
+.wbe-selection-option small {
+    display: block;
+    color: #646970;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+/* Mode sélectionné */
+.wbe-selection-option:has(input[type="radio"]:checked) {
+    background: #fff;
+    border-color: #2271b1;
+    box-shadow: 0 2px 8px rgba(34, 113, 177, 0.1);
+}
+
+/* ============================================
+   SÉLECTEUR DE PRODUITS
+   ============================================ */
+
+.wbe-product-selector {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #dcdcde;
+}
+
+.wbe-product-search-mini {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.wbe-category-product-search {
+    width: 100%;
+    padding: 10px 40px 10px 15px;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.wbe-category-product-search:focus {
+    border-color: #2271b1;
+    outline: none;
+    box-shadow: 0 0 0 1px #2271b1;
+}
+
+.wbe-product-search-mini .spinner {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+}
+
+/* ============================================
+   LISTE DES PRODUITS
+   ============================================ */
+
+.wbe-product-checklist {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.wbe-loading-products {
+    padding: 30px;
+    text-align: center;
+    color: #646970;
+}
+
+.wbe-no-products {
+    padding: 30px;
+    text-align: center;
+    color: #646970;
+}
+
+.wbe-error {
+    padding: 30px;
+    text-align: center;
+    color: #d63638;
+}
+
+/* "Tout sélectionner" */
+.wbe-select-all-wrapper {
+    padding: 12px 15px;
+    background: #f6f7f7;
+    border-bottom: 1px solid #dcdcde;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.wbe-select-all {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.wbe-select-all input[type="checkbox"] {
+    margin: 0;
+}
+
+.wbe-select-all strong {
+    font-size: 13px;
+    color: #2271b1;
+}
+
+/* Liste des produits */
+.wbe-products-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.wbe-products-list li {
+    border-bottom: 1px solid #f0f0f1;
+    transition: background 0.2s ease;
+}
+
+.wbe-products-list li:last-child {
+    border-bottom: none;
+}
+
+.wbe-products-list li:hover {
+    background: #f6f7f7;
+}
+
+.wbe-products-list label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.wbe-products-list input[type="checkbox"] {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.product-name {
+    flex: 1;
+    font-size: 13px;
+    color: #1d2327;
+}
+
+.product-sku {
+    font-size: 12px;
+    color: #646970;
+    margin-left: 8px;
+}
+
+.product-price {
+    font-size: 13px;
+    color: #2271b1;
+    font-weight: 500;
+    margin-left: auto;
+}
+
+/* ============================================
+   COMPTEUR DE SÉLECTION
+   ============================================ */
+
+.wbe-selected-count {
+    margin-top: 15px;
+    padding: 12px 15px;
+    background: #e7f5fe;
+    border: 1px solid #c5e5f7;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.wbe-selected-count strong {
+    color: #2271b1;
+    font-size: 14px;
+}
+
+.wbe-selected-count .count {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   SCROLLBAR PERSONNALISÉE
+   ============================================ */
+
+.wbe-product-checklist::-webkit-scrollbar {
+    width: 8px;
+}
+
+.wbe-product-checklist::-webkit-scrollbar-track {
+    background: #f0f0f1;
+}
+
+.wbe-product-checklist::-webkit-scrollbar-thumb {
+    background: #c3c4c7;
+    border-radius: 4px;
+}
+
+.wbe-product-checklist::-webkit-scrollbar-thumb:hover {
+    background: #a7aaad;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 782px) {
+    .wbe-product-selection-mode {
+        grid-template-columns: 1fr;
+    }
+
+    .wbe-category-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .wbe-remove-category {
+        align-self: flex-end;
+    }
+}
