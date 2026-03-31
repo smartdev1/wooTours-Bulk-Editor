@@ -147,7 +147,7 @@ class BulkProcessor
                 $result['errors']++;
                 $result['failed_ids'][] = $product_id;
 
-                $error_message = "Produit #$product_id : {$e->getMessage()}";
+                $error_message = "$product_name : {$e->getMessage()}";
                 $result['error_details'][] = $error_message;
 
                 // Ajouter aussi aux détails pour traçabilité
@@ -287,7 +287,7 @@ class BulkProcessor
                 LoggerService::log_reset($product_id, true);
             } catch (\Exception $e) {
                 $report['errors']++;
-                $report['error_details'][] = "Produit #$product_id : {$e->getMessage()}";
+                $report['error_details'][] = "$product_name : {$e->getMessage()}";
                 $report['details'][] = [
                     'product_id' => $product_id,
                     'product_name' => get_the_title($product_id),

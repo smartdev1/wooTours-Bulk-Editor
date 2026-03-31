@@ -48,7 +48,11 @@ class MetaRepository
         // 2. Cache Wootour
         $cache = self::get_wootour_cache($product_id);
         if (!empty($cache['start_date'])) {
-            return date('Y-m-d', $cache['start_date']);
+            if (is_numeric($cache['start_date'])) {
+                return date('Y-m-d', (int)$cache['start_date']);
+            } else {
+                return $cache['start_date'];
+            }
         }
         
         // 3. Timestamp Wootour
@@ -74,7 +78,11 @@ class MetaRepository
         // 2. Cache Wootour
         $cache = self::get_wootour_cache($product_id);
         if (!empty($cache['end_date'])) {
-            return date('Y-m-d', $cache['end_date']);
+            if (is_numeric($cache['end_date'])) {
+                return date('Y-m-d', (int)$cache['end_date']);
+            } else {
+                return $cache['end_date'];
+            }
         }
         
         // 3. Timestamp Wootour

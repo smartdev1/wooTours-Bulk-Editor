@@ -1,0 +1,263 @@
+/* ========================================================
+   MODE "TOUT SAUF" — EXCLUSION
+   Ajouter à la fin de admin/css/admin.css
+======================================================== */
+
+/* Carte du mode exclusion dans la grille de sélection */
+.wbe-mode-exclusion .mode-icon {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.wbe-mode-exclusion:hover .mode-icon,
+.wbe-mode-exclusion input[type="radio"]:checked ~ .mode-icon {
+    background: #856404;
+    color: #fff;
+}
+
+/* Notice spéciale pour le mode exclusion */
+.wbe-notice-exclusion {
+    border-color: #856404;
+    background: #fff8e6;
+}
+
+.wbe-notice-exclusion .dashicons {
+    color: #856404;
+}
+
+/* ── Sélecteur de sous-mode ─────────────────────────── */
+
+.wbe-exclusion-mode-selector {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.wbe-exclusion-mode-label {
+    display: flex !important;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.25s;
+    background: #fff;
+}
+
+.wbe-exclusion-mode-label:hover {
+    border-color: #856404;
+    background: #fff8e6;
+}
+
+.wbe-exclusion-mode-label input[type="radio"] {
+    margin: 0 !important;
+    flex-shrink: 0;
+}
+
+.wbe-exclusion-mode-label input[type="radio"]:checked ~ .excl-mode-icon {
+    background: #856404;
+    color: #fff;
+}
+
+.wbe-exclusion-mode-label input[type="radio"]:checked ~ .excl-mode-text strong {
+    color: #856404;
+}
+
+.excl-mode-icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f0f0f1;
+    border-radius: 8px;
+    transition: all 0.25s;
+}
+
+.excl-mode-icon .dashicons {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+}
+
+.excl-mode-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.excl-mode-text strong {
+    font-size: 13px;
+    transition: color 0.25s;
+}
+
+.excl-mode-text small {
+    color: #666;
+    font-size: 11px;
+}
+
+/* ── Sous-panneaux ──────────────────────────────────── */
+
+.wbe-exclusion-subpanel {
+    padding: 16px 0 0;
+    border-top: 2px solid #f0f0f1;
+    margin-top: 4px;
+}
+
+/* ── Tags "exclus" (rouge/orange au lieu de bleu) ───── */
+
+.wbe-excl-selected-summary {
+    margin-top: 16px;
+}
+
+.wbe-excl-selected-summary h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: #b45309;
+}
+
+.wbe-excl-selected-summary h4 .dashicons {
+    color: #b45309;
+}
+
+.wbe-excl-tags {
+    background: #fff8e6;
+    border-color: #fcd34d;
+}
+
+.wbe-tag-excl {
+    border-color: #b45309 !important;
+    color: #b45309 !important;
+}
+
+.wbe-tag-excl .tag-icon .dashicons,
+.wbe-tag-excl .tag-remove {
+    color: #b45309 !important;
+}
+
+.wbe-tag-excl .tag-remove:hover {
+    color: #dc2626 !important;
+}
+
+/* Badge compteur */
+.wbe-excl-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    background: #b45309;
+    color: #fff;
+    border-radius: 11px;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+/* Produit exclu dans la liste */
+.wbe-product-item.wbe-item-excluded {
+    background: #fff8e6 !important;
+    border-left: 3px solid #b45309;
+}
+
+/* ── Résumé global mode exclusion ───────────────────── */
+
+.wbe-excl-global-summary {
+    margin-top: 24px;
+}
+
+.wbe-excl-summary-box {
+    background: #fff;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.excl-summary-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #374151;
+}
+
+.excl-summary-row .dashicons {
+    flex-shrink: 0;
+    color: #9ca3af;
+}
+
+.excl-summary-minus {
+    color: #b45309;
+    padding-left: 4px;
+}
+
+.excl-summary-minus .dashicons {
+    color: #b45309;
+}
+
+.excl-summary-result {
+    font-weight: bold;
+    font-size: 15px;
+    color: #065f46;
+    padding-top: 8px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.excl-summary-result .dashicons {
+    color: #059669;
+}
+
+.excl-summary-row strong {
+    font-weight: 700;
+}
+
+/* ── Info portée (sous-mode C) ──────────────────────── */
+
+.wbe-excl-scope-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #166534;
+}
+
+.wbe-excl-scope-info .dashicons {
+    color: #16a34a;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* kbd style */
+kbd {
+    display: inline-block;
+    padding: 2px 5px;
+    font-family: monospace;
+    font-size: 11px;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    box-shadow: 0 1px 0 rgba(0,0,0,.15);
+}
+
+/* ── Responsive ─────────────────────────────────────── */
+
+@media (max-width: 782px) {
+    .wbe-exclusion-mode-selector {
+        grid-template-columns: 1fr;
+    }
+}

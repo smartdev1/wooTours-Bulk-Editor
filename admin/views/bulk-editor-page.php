@@ -62,6 +62,16 @@ $categories = CategoryRepository::get_all_categories();
                                 <small>Appliquer à l'ensemble des produits</small>
                             </span>
                         </label>
+
+                        <!-- NOUVEAU MODE : Tout sauf -->
+                        <label class="wbe-mode-label wbe-mode-exclusion">
+                            <input type="radio" name="selection_mode" value="exclusion" />
+                            <span class="mode-icon"><span class="dashicons dashicons-minus"></span></span>
+                            <span class="mode-text">
+                                <strong>Tout sauf…</strong>
+                                <small>Exclure des produits ou catégories</small>
+                            </span>
+                        </label>
                     </div>
 
                     <!-- SÉLECTION PAR CATÉGORIE -->
@@ -94,7 +104,6 @@ $categories = CategoryRepository::get_all_categories();
                                     <strong>Choisissez les produits dans cette catégorie</strong>
                                 </label>
 
-                                <!-- Option : Tous les produits de la catégorie -->
                                 <label class="wbe-option-all">
                                     <input type="radio" name="category_products_selection" value="all" />
                                     <span class="option-icon"><span class="dashicons dashicons-yes"></span></span>
@@ -104,7 +113,6 @@ $categories = CategoryRepository::get_all_categories();
                                     </span>
                                 </label>
 
-                                <!-- Option : Sélection manuelle -->
                                 <label class="wbe-option-manual">
                                     <input type="radio" name="category_products_selection" value="manual" />
                                     <span class="option-icon"><span class="dashicons dashicons-filter"></span></span>
@@ -114,7 +122,6 @@ $categories = CategoryRepository::get_all_categories();
                                     </span>
                                 </label>
 
-                                <!-- Interface de sélection manuelle (cachée par défaut) -->
                                 <div class="wbe-manual-selection" id="wbe-manual-selection" style="display: none;">
                                     <div class="wbe-product-search-wrapper">
                                         <input
@@ -125,7 +132,6 @@ $categories = CategoryRepository::get_all_categories();
                                         <span class="spinner"></span>
                                     </div>
 
-                                    <!-- Liste de tous les produits de la catégorie -->
                                     <div class="wbe-product-actions">
                                         <button type="button" class="button button-small" id="wbe-select-all">
                                             <span class="dashicons dashicons-yes"></span>
@@ -140,13 +146,11 @@ $categories = CategoryRepository::get_all_categories();
                                         </span>
                                     </div>
 
-                                    <!-- Résultats -->
                                     <div id="wbe-category-product-results" class="wbe-product-list"></div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Résumé de la sélection -->
                         <div class="wbe-selection-summary" id="wbe-category-summary" style="display: none;">
                             <div class="wbe-summary-box">
                                 <span class="dashicons dashicons-category"></span>
@@ -191,10 +195,8 @@ $categories = CategoryRepository::get_all_categories();
                             </div>
                         </div>
 
-                        <!-- Résultats de recherche -->
                         <div id="wbe-product-results" class="wbe-product-list"></div>
 
-                        <!-- Produits sélectionnés -->
                         <div class="wbe-selected-products-summary">
                             <h3>Produits sélectionnés</h3>
                             <div id="wbe-selected-products" class="wbe-selected-tags">
@@ -219,7 +221,6 @@ $categories = CategoryRepository::get_all_categories();
                             Le traitement sera effectué par lots pour éviter les problèmes de performance.
                         </div>
 
-                        <!-- Information sur le nombre de produits -->
                         <div class="wbe-field-group">
                             <label>
                                 <strong>Nombre de produits dans le catalogue</strong>
@@ -230,6 +231,196 @@ $categories = CategoryRepository::get_all_categories();
                             </div>
                         </div>
                     </div>
+
+                    <!-- ========================================
+                         NOUVEAU PANNEAU : TOUT SAUF
+                    ======================================== -->
+                    <div class="wbe-selection-panel" id="panel-exclusion" style="display: none;">
+
+                        <div class="wbe-notice wbe-notice-exclusion">
+                            <span class="dashicons dashicons-minus"></span>
+                            <div>
+                                <strong>Mode "Tout sauf" :</strong> Les modifications s'appliqueront
+                                à <strong>tous les produits</strong> à l'exception de ceux que vous excluez ci-dessous.
+                            </div>
+                        </div>
+
+                        <!-- Choix du sous-mode d'exclusion -->
+                        <div class="wbe-field-group">
+                            <label><strong>Que souhaitez-vous exclure ?</strong></label>
+                            <div class="wbe-exclusion-mode-selector">
+
+                                <label class="wbe-exclusion-mode-label">
+                                    <input type="radio" name="exclusion_mode" value="exclude_products" checked />
+                                    <span class="excl-mode-icon"><span class="dashicons dashicons-admin-post"></span></span>
+                                    <span class="excl-mode-text">
+                                        <strong>Des produits spécifiques</strong>
+                                        <small>Tout le catalogue sauf ces produits</small>
+                                    </span>
+                                </label>
+
+                                <label class="wbe-exclusion-mode-label">
+                                    <input type="radio" name="exclusion_mode" value="exclude_from_category" />
+                                    <span class="excl-mode-icon"><span class="dashicons dashicons-category"></span></span>
+                                    <span class="excl-mode-text">
+                                        <strong>Des produits dans une catégorie</strong>
+                                        <small>Toute la catégorie sauf ces produits</small>
+                                    </span>
+                                </label>
+
+                                <label class="wbe-exclusion-mode-label">
+                                    <input type="radio" name="exclusion_mode" value="exclude_categories" />
+                                    <span class="excl-mode-icon"><span class="dashicons dashicons-tag"></span></span>
+                                    <span class="excl-mode-text">
+                                        <strong>Des catégories entières</strong>
+                                        <small>Tout le catalogue sauf ces catégories</small>
+                                    </span>
+                                </label>
+
+                            </div>
+                        </div>
+
+                        <!-- ── Sous-panneau A : Exclure des produits spécifiques ── -->
+                        <div class="wbe-exclusion-subpanel" id="excl-panel-products">
+                            <div class="wbe-field-group">
+                                <label for="wbe-excl-product-search">
+                                    <strong>Rechercher les produits à exclure</strong>
+                                </label>
+                                <div class="wbe-product-search-wrapper">
+                                    <input
+                                        type="text"
+                                        id="wbe-excl-product-search"
+                                        placeholder="Tapez le nom d'un produit (minimum 2 caractères)..."
+                                        class="regular-text" />
+                                    <span class="spinner"></span>
+                                </div>
+                                <div id="wbe-excl-product-results" class="wbe-product-list"></div>
+                            </div>
+
+                            <div class="wbe-excl-selected-summary">
+                                <h4>
+                                    <span class="dashicons dashicons-dismiss"></span>
+                                    Produits exclus
+                                    <span class="wbe-excl-badge" id="wbe-excl-products-count">0</span>
+                                </h4>
+                                <div id="wbe-excl-selected-products" class="wbe-selected-tags wbe-excl-tags">
+                                    <p class="wbe-no-selection">Aucun produit exclu — tous les produits du catalogue seront traités</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ── Sous-panneau B : Toute une catégorie sauf certains produits ── -->
+                        <div class="wbe-exclusion-subpanel" id="excl-panel-from-category" style="display: none;">
+                            <div class="wbe-field-group">
+                                <label for="wbe-excl-category">
+                                    <strong>Choisissez la catégorie de base</strong>
+                                </label>
+                                <select id="wbe-excl-category" name="excl_category" style="width: 100%;">
+                                    <option value="">Choisir une catégorie...</option>
+                                    <?php foreach ($categories as $category) : ?>
+                                        <option value="<?php echo esc_attr($category->term_id); ?>">
+                                            <?php echo esc_html($category->name); ?>
+                                            (<?php echo esc_html($category->count); ?> produits)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <!-- Produits à exclure dans la catégorie -->
+                            <div id="wbe-excl-cat-products-wrapper" style="display: none;">
+                                <div class="wbe-field-group">
+                                    <label>
+                                        <strong>Produits à exclure dans cette catégorie</strong>
+                                    </label>
+                                    <div class="wbe-product-search-wrapper">
+                                        <input
+                                            type="text"
+                                            id="wbe-excl-cat-product-search"
+                                            placeholder="Rechercher dans cette catégorie..."
+                                            class="regular-text" />
+                                        <span class="spinner"></span>
+                                    </div>
+                                    <div class="wbe-product-actions">
+                                        <button type="button" class="button button-small" id="wbe-excl-cat-select-all">
+                                            <span class="dashicons dashicons-yes"></span> Tout exclure
+                                        </button>
+                                        <button type="button" class="button button-small" id="wbe-excl-cat-deselect-all">
+                                            <span class="dashicons dashicons-no"></span> Tout désexclure
+                                        </button>
+                                        <span class="wbe-selected-count">
+                                            <span id="wbe-excl-cat-selected-count">0</span> exclu(s)
+                                        </span>
+                                    </div>
+                                    <div id="wbe-excl-cat-product-results" class="wbe-product-list"></div>
+                                </div>
+
+                                <div class="wbe-excl-selected-summary">
+                                    <h4>
+                                        <span class="dashicons dashicons-dismiss"></span>
+                                        Produits exclus dans cette catégorie
+                                        <span class="wbe-excl-badge" id="wbe-excl-cat-count">0</span>
+                                    </h4>
+                                    <div id="wbe-excl-cat-selected-products" class="wbe-selected-tags wbe-excl-tags">
+                                        <p class="wbe-no-selection">Aucune exclusion — tous les produits de la catégorie seront traités</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ── Sous-panneau C : Exclure des catégories entières ── -->
+                        <div class="wbe-exclusion-subpanel" id="excl-panel-categories" style="display: none;">
+                            <div class="wbe-field-group">
+                                <label for="wbe-excl-categories-select">
+                                    <strong>Catégories à exclure du traitement</strong>
+                                </label>
+                                <select id="wbe-excl-categories-select" name="excl_categories[]" multiple style="width: 100%;">
+                                    <?php foreach ($categories as $category) : ?>
+                                        <option value="<?php echo esc_attr($category->term_id); ?>">
+                                            <?php echo esc_html($category->name); ?>
+                                            (<?php echo esc_html($category->count); ?> produits)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="description">
+                                    Maintenez <kbd>Ctrl</kbd> (ou <kbd>Cmd</kbd> sur Mac) pour sélectionner plusieurs catégories.
+                                </p>
+                            </div>
+
+                            <div class="wbe-excl-selected-summary" id="wbe-excl-categories-summary" style="display: none;">
+                                <h4>
+                                    <span class="dashicons dashicons-dismiss"></span>
+                                    Catégories exclues
+                                    <span class="wbe-excl-badge" id="wbe-excl-categories-count">0</span>
+                                </h4>
+                                <div id="wbe-excl-categories-tags" class="wbe-selected-tags wbe-excl-tags"></div>
+
+                                <div class="wbe-excl-scope-info">
+                                    <span class="dashicons dashicons-info"></span>
+                                    <span id="wbe-excl-scope-text">Tous les produits du catalogue seront traités</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Résumé global du mode exclusion -->
+                        <div class="wbe-excl-global-summary" id="wbe-excl-global-summary" style="display: none;">
+                            <div class="wbe-excl-summary-box">
+                                <div class="excl-summary-row">
+                                    <span class="dashicons dashicons-screenoptions"></span>
+                                    <span>Produits dans le périmètre : <strong id="wbe-excl-scope-count">—</strong></span>
+                                </div>
+                                <div class="excl-summary-row excl-summary-minus">
+                                    <span class="dashicons dashicons-minus"></span>
+                                    <span>Produits exclus : <strong id="wbe-excl-excluded-count">0</strong></span>
+                                </div>
+                                <div class="excl-summary-row excl-summary-result">
+                                    <span class="dashicons dashicons-yes-alt"></span>
+                                    <span>Produits qui seront modifiés : <strong id="wbe-excl-final-count">—</strong></span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <!-- /panel-exclusion -->
 
                 </div>
 
@@ -260,7 +451,6 @@ $categories = CategoryRepository::get_all_categories();
                         Les champs vides ne toucheront pas aux données existantes.
                     </div>
 
-                    <!-- Plage de dates -->
                     <div class="wbe-field-row">
                         <div class="wbe-field-group wbe-field-half">
                             <label for="wbe-start-date">
@@ -289,7 +479,6 @@ $categories = CategoryRepository::get_all_categories();
                         </div>
                     </div>
 
-                    <!-- Jours de la semaine -->
                     <div class="wbe-field-group">
                         <label>
                             <strong>Jours disponibles</strong>
@@ -326,7 +515,6 @@ $categories = CategoryRepository::get_all_categories();
                         </div>
                     </div>
 
-                    <!-- Dates à exclure -->
                     <div class="wbe-field-group">
                         <label for="wbe-exclude-dates">
                             <strong>Exclure des dates spécifiques</strong>
@@ -341,7 +529,6 @@ $categories = CategoryRepository::get_all_categories();
                         </div>
                     </div>
 
-                    <!-- Dates spécifiques avec calendrier (MODIFIÉ) -->
                     <div class="wbe-field-group">
                         <label for="wbe-specific-dates">
                             <strong>Ajouter des dates spécifiques</strong>

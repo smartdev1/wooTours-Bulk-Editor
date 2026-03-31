@@ -8,10 +8,6 @@ class ProductRepository
 {
     /**
      * Récupère tous les produits d'une ou plusieurs catégories
-     * 
-     * @param array $category_ids Liste des IDs de catégories
-     * @param int $limit Limite de produits (0 = tous)
-     * @return array Tableau d'IDs de produits
      */
     public static function get_products_by_categories(array $category_ids, int $limit = 0): array
     {
@@ -35,15 +31,11 @@ class ProductRepository
         ];
 
         $query = new WP_Query($args);
-        
         return $query->posts;
     }
 
     /**
      * Récupère des produits spécifiques par IDs
-     * 
-     * @param array $product_ids Liste des IDs de produits
-     * @return array Tableau d'objets WP_Post
      */
     public static function get_products_by_ids(array $product_ids): array
     {
@@ -60,15 +52,11 @@ class ProductRepository
         ];
 
         $query = new WP_Query($args);
-        
         return $query->posts;
     }
 
     /**
      * Récupère tous les produits (avec limite de sécurité)
-     * 
-     * @param int $limit Limite de produits (défaut: 500)
-     * @return array Tableau d'IDs de produits
      */
     public static function get_all_products(int $limit = 500): array
     {
@@ -80,28 +68,21 @@ class ProductRepository
         ];
 
         $query = new WP_Query($args);
-        
         return $query->posts;
     }
 
     /**
      * Compte le nombre de produits dans une sélection
-     * 
-     * @param array $category_ids IDs de catégories (optionnel)
-     * @param array $product_ids IDs de produits spécifiques (optionnel)
-     * @return int Nombre total de produits
      */
     public static function count_products(array $category_ids = [], array $product_ids = []): int
     {
         $all_ids = [];
 
-        // Produits par catégories
         if (!empty($category_ids)) {
             $cat_products = self::get_products_by_categories($category_ids);
             $all_ids = array_merge($all_ids, $cat_products);
         }
 
-        // Produits spécifiques
         if (!empty($product_ids)) {
             $all_ids = array_merge($all_ids, $product_ids);
         }
@@ -111,44 +92,28 @@ class ProductRepository
 
     /**
      * Vérifie si un produit existe et est publié
-     * 
-     * @param int $product_id ID du produit
-     * @return bool
      */
     public static function product_exists(int $product_id): bool
     {
         $product = get_post($product_id);
-        
         return $product && $product->post_type === 'product' && $product->post_status === 'publish';
     }
 
     /**
-     * Récupère les produits par lots (batch processing)
-     * Essentiel pour éviter les timeouts sur gros volumes
-     * 
-     * @param array $product_ids Liste complète des IDs
-     * @param int $batch_size Taille du lot (défaut: 50)
-     * @return array Tableau de tableaux (lots)
+     * Récupère les produits par lots
      */
     public static function split_into_batches(array $product_ids, int $batch_size = 50): array
     {
         return array_chunk($product_ids, $batch_size);
     }
 
-    // ============================================
-    // NOUVELLES MÉTHODES POUR LA SÉLECTION PAR CATÉGORIE
-    // ============================================
-
     /**
-     * Récupère les détails d'un produit (nom, SKU, etc.)
-     * 
-     * @param int $product_id ID du produit
-     * @return array|null Détails du produit ou null
+     * Récupère les détails d'un produit
      */
     public static function get_product_details(int $product_id): ?array
     {
         $product = wc_get_product($product_id);
-        
+
         if (!$product) {
             return null;
         }
@@ -165,30 +130,22 @@ class ProductRepository
 
     /**
      * Récupère les détails de plusieurs produits
-     * 
-     * @param array $product_ids Liste des IDs
-     * @return array Tableau de détails
      */
     public static function get_multiple_products_details(array $product_ids): array
     {
         $products = [];
-        
+
         foreach ($product_ids as $product_id) {
             if ($details = self::get_product_details($product_id)) {
                 $products[] = $details;
             }
         }
-        
+
         return $products;
     }
 
     /**
-     * Récupère tous les produits d'une catégorie spécifique
-     * 
-     * @param int $category_id ID de la catégorie
-     * @param int $page Page pour la pagination
-     * @param int $per_page Produits par page
-     * @return array [products => IDs, total => count, pages => page_count]
+     * Récupère tous les produits d'une catégorie avec pagination
      */
     public static function get_products_in_category(int $category_id, int $page = 1, int $per_page = 50): array
     {
@@ -208,7 +165,7 @@ class ProductRepository
         ];
 
         $query = new WP_Query($args);
-        
+
         return [
             'products' => $query->posts,
             'total'    => $query->found_posts,
@@ -217,12 +174,7 @@ class ProductRepository
     }
 
     /**
-     * Recherche des produits dans une catégorie spécifique
-     * 
-     * @param int $category_id ID de la catégorie
-     * @param string $search_term Terme de recherche
-     * @param int $limit Limite de résultats
-     * @return array IDs des produits trouvés
+     * Recherche dans une catégorie
      */
     public static function search_products_in_category(int $category_id, string $search_term, int $limit = 50): array
     {
@@ -242,16 +194,11 @@ class ProductRepository
         ];
 
         $query = new WP_Query($args);
-        
         return $query->posts;
     }
 
     /**
      * Recherche globale de produits
-     * 
-     * @param string $search_term Terme de recherche
-     * @param int $limit Limite de résultats
-     * @return array Détails des produits trouvés
      */
     public static function search_products(string $search_term, int $limit = 50): array
     {
@@ -264,14 +211,11 @@ class ProductRepository
         ];
 
         $query = new WP_Query($args);
-        
         return self::get_multiple_products_details($query->posts);
     }
 
     /**
-     * Compte le nombre total de produits dans le catalogue
-     * 
-     * @return int Nombre total de produits
+     * Compte le nombre total de produits
      */
     public static function count_all_products(): int
     {
@@ -283,63 +227,41 @@ class ProductRepository
         ];
 
         $query = new WP_Query($args);
-        
         return $query->found_posts;
     }
 
     /**
-     * Récupère les IDs de tous les produits (pour mode "tout le catalogue")
-     * 
-     * @param int $limit Limite maximale
-     * @return array IDs des produits
+     * Récupère les IDs de tous les produits publiés
      */
-    // public static function get_all_product_ids(int $limit = 1000): array
-    // {
-    //     $args = [
-    //         'post_type'      => 'product',
-    //         'post_status'    => 'publish',
-    //         'posts_per_page' => $limit,
-    //         'fields'         => 'ids'
-    //     ];
+    public static function get_all_product_ids(): array
+    {
+        global $wpdb;
 
-    //     $query = new WP_Query($args);
-        
-    //     return $query->posts;
-    // }
+        $product_ids = $wpdb->get_col(
+            "SELECT ID FROM {$wpdb->posts}
+            WHERE post_type = 'product'
+            AND post_status = 'publish'"
+        );
+
+        return array_map('intval', $product_ids);
+    }
 
     /**
-     * Récupère les IDs des produits pour plusieurs scénarios
-     * 
-     * @param array $params Paramètres de sélection
-     * @return array IDs des produits
+     * Récupère les produits selon un type de sélection
      */
     public static function get_products_by_selection(array $params): array
     {
         $selection_type = $params['selection_type'] ?? 'manual';
-        
+
         switch ($selection_type) {
             case 'all':
-                // Tous les produits du catalogue
                 return self::get_all_product_ids();
-                
             case 'category_all':
-                // Tous les produits d'une catégorie
                 $category_id = $params['category_id'] ?? 0;
-                if ($category_id) {
-                    return self::get_products_by_categories([$category_id]);
-                }
-                return [];
-                
+                return $category_id ? self::get_products_by_categories([$category_id]) : [];
             case 'category_manual':
-                // Produits spécifiques dans une catégorie
-                $product_ids = $params['product_ids'] ?? [];
-                return array_map('intval', $product_ids);
-                
             case 'manual':
-                // Produits spécifiques (mode libre)
-                $product_ids = $params['product_ids'] ?? [];
-                return array_map('intval', $product_ids);
-                
+                return array_map('intval', $params['product_ids'] ?? []);
             default:
                 return [];
         }
@@ -347,47 +269,28 @@ class ProductRepository
 
     /**
      * Valide une liste d'IDs de produits
-     * 
-     * @param array $product_ids IDs à valider
-     * @return array IDs valides
      */
     public static function validate_product_ids(array $product_ids): array
     {
         $valid_ids = [];
-        
+
         foreach ($product_ids as $id) {
             $id = intval($id);
             if ($id > 0 && self::product_exists($id)) {
                 $valid_ids[] = $id;
             }
         }
-        
+
         return array_unique($valid_ids);
     }
 
-    public static function get_all_product_ids(): array
-    {
-        global $wpdb;
-        
-        $product_ids = $wpdb->get_col(
-            "SELECT ID FROM {$wpdb->posts} 
-            WHERE post_type = 'product' 
-            AND post_status = 'publish'"
-        );
-        
-        return array_map('intval', $product_ids);
-    }
-
     /**
-     * Formate les produits pour l'affichage JavaScript
-     * 
-     * @param array $product_ids IDs des produits
-     * @return array Produits formatés
+     * Formate les produits pour JavaScript
      */
     public static function format_products_for_js(array $product_ids): array
     {
         $products = [];
-        
+
         foreach ($product_ids as $product_id) {
             if ($details = self::get_product_details($product_id)) {
                 $products[] = [
@@ -398,7 +301,96 @@ class ProductRepository
                 ];
             }
         }
-        
+
         return $products;
+    }
+
+    // ================================================================
+    //  NOUVELLES MÉTHODES — MODE "TOUT SAUF"
+    // ================================================================
+
+    /**
+     * Retourne tous les IDs d'un périmètre en excluant des produits spécifiques.
+     *
+     * Utilisé pour les deux sous-modes :
+     *   - Tout le catalogue sauf [produits]
+     *   - Toute une catégorie sauf [produits]
+     *
+     * @param array $scope_ids     IDs du périmètre de départ (catalogue ou catégorie)
+     * @param array $excluded_ids  IDs à retirer du périmètre
+     * @return array               IDs à traiter
+     */
+    public static function get_all_except_products(array $scope_ids, array $excluded_ids): array
+    {
+        if (empty($excluded_ids)) {
+            // Aucune exclusion → retourner tout le périmètre
+            return array_values(array_map('intval', $scope_ids));
+        }
+
+        $excluded_ids = array_map('intval', $excluded_ids);
+        $scope_ids    = array_map('intval', $scope_ids);
+
+        // Retirer les exclusions du périmètre
+        $result = array_values(array_diff($scope_ids, $excluded_ids));
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log(sprintf(
+                '[WBE] get_all_except_products : périmètre=%d | exclus=%d | résultat=%d',
+                count($scope_ids),
+                count($excluded_ids),
+                count($result)
+            ));
+        }
+
+        return $result;
+    }
+
+    /**
+     * Retourne tous les produits du catalogue en excluant des catégories entières.
+     *
+     * Utilisé pour le sous-mode : Tout le catalogue sauf [catégories]
+     *
+     * @param array $excluded_category_ids  IDs des catégories à exclure
+     * @return array                        IDs des produits à traiter
+     */
+    public static function get_all_except_categories(array $excluded_category_ids): array
+    {
+        if (empty($excluded_category_ids)) {
+            return self::get_all_product_ids();
+        }
+
+        // Récupérer les IDs des produits appartenant aux catégories exclues
+        $excluded_product_ids = self::get_products_by_categories($excluded_category_ids);
+
+        if (empty($excluded_product_ids)) {
+            // Les catégories exclues sont vides → retourner tout le catalogue
+            return self::get_all_product_ids();
+        }
+
+        // Récupérer tous les produits et soustraire les exclusions
+        // On utilise la requête SQL directe pour la performance sur gros volumes
+        global $wpdb;
+
+        $excluded_ids_sql = implode(',', array_map('intval', $excluded_product_ids));
+
+        $product_ids = $wpdb->get_col(
+            "SELECT ID FROM {$wpdb->posts}
+             WHERE post_type = 'product'
+             AND post_status = 'publish'
+             AND ID NOT IN ({$excluded_ids_sql})"
+        );
+
+        $result = array_map('intval', $product_ids);
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log(sprintf(
+                '[WBE] get_all_except_categories : catégories exclues=%d | produits exclus=%d | résultat=%d',
+                count($excluded_category_ids),
+                count($excluded_product_ids),
+                count($result)
+            ));
+        }
+
+        return $result;
     }
 }
